@@ -1,0 +1,79 @@
+<resources>
+    <!-- Shown in the launcher/app drawer — deliberately generic, not "Pumpkin" (PRD 4.1) -->
+    <string name="app_display_label">Calculator</string>
+    <string name="app_name">Pumpkin</string>
+
+    <string name="lock_title">Unlock</string>
+    <string name="lock_biometric_prompt_title">Unlock Pumpkin</string>
+    <string name="lock_biometric_prompt_subtitle">Confirm your identity to continue</string>
+    <string name="lock_use_pin">Use PIN instead</string>
+    <string name="lock_pin_hint">Enter PIN</string>
+    <string name="lock_pin_set_hint">Set a PIN</string>
+    <string name="lock_error_generic">Couldn\'t unlock. Try again.</string>
+
+    <string name="change_pin_title">Change PIN</string>
+    <string name="change_pin_current_hint">Current PIN</string>
+    <string name="change_pin_new_hint">New PIN</string>
+    <string name="change_pin_button">Save new PIN</string>
+    <string name="change_pin_wrong_current">Current PIN is incorrect</string>
+    <string name="change_pin_success">PIN updated</string>
+    <string name="change_pin_back">Back</string>
+
+    <string name="edit_name_title">Edit name</string>
+    <string name="edit_name_hint">Display name</string>
+    <string name="edit_name_save">Save</string>
+    <string name="edit_name_success">Name updated</string>
+    <string name="edit_name_back">Back</string>
+
+    <!--
+      OAuth 2.0 web client ID for Google Sign-In. NOT the same as the api_key
+      in google-services.json. Firebase only issues this once your Android
+      app's SHA-1 signing fingerprint has been added under Project Settings >
+      Your apps — after that, find it under Project Settings > General >
+      "Web SDK configuration" (or the auto-generated "Web client (Auto
+      created by Google Service)" OAuth client under Google Cloud Console >
+      APIs & Services > Credentials). Left blank until then; the Google
+      Sign-In button disables itself while this is empty (see AuthScreen.kt).
+    -->
+    <string name="google_web_client_id">389409819069-g0onhvdtu40qju1tug5koan1is3bnaec.apps.googleusercontent.com</string>
+
+    <string name="auth_email_hint">Email</string>
+    <string name="auth_password_hint">Password</string>
+    <string name="auth_display_name_hint">Display name</string>
+    <string name="auth_sign_in">Sign in</string>
+    <string name="auth_sign_up">Create account</string>
+    <string name="auth_switch_to_sign_up">Need an account? Sign up</string>
+    <string name="auth_switch_to_sign_in">Already have an account? Sign in</string>
+    <string name="auth_google_sign_in">Sign in with Google</string>
+    <string name="auth_google_not_configured">Google Sign-In not configured yet</string>
+    <string name="auth_sign_out">Sign out</string>
+    <string name="chatlist_change_pin_action">Change PIN</string>
+    <string name="chatlist_edit_name_action">Edit name</string>
+
+    <string name="chatlist_title">Chats</string>
+    <string name="chatlist_empty">No conversations yet</string>
+    <string name="chatlist_new_chat_fab">+</string>
+    <string name="chatlist_new_chat_title">Start a chat</string>
+    <string name="chatlist_new_chat_hint_text">Enter the email your partner signed up with.</string>
+    <string name="chatlist_new_chat_email_hint">Partner\'s email</string>
+    <string name="chatlist_new_chat_start">Start</string>
+    <string name="chatlist_new_chat_cancel">Cancel</string>
+    <string name="chatlist_new_message_count">New Message (%d)</string>
+    <string name="chatlist_no_new_message">No New Message</string>
+    <string name="chatlist_unknown_partner">Unknown</string>
+
+    <string name="chat_input_hint">Message</string>
+    <string name="chat_send">Send</string>
+    <string name="chat_status_sent">Sent</string>
+    <string name="chat_status_delivered">Delivered</string>
+    <string name="chat_status_read">Read</string>
+    <string name="chat_typing">Typing…</string>
+    <string name="chat_send_error">Message failed to send — check your connection.</string>
+    <string name="chat_online">Online</string>
+    <string name="chat_last_seen_just_now">Last seen just now</string>
+    <string name="chat_last_seen_today">Last seen today at %1$s</string>
+    <string name="chat_last_seen_yesterday">Last seen yesterday at %1$s</string>
+    <string name="chat_last_seen_days_ago">Last seen %1$d days ago</string>
+    <string name="chat_last_seen_weeks_ago">Last seen %1$d weeks ago</string>
+    <string name="chat_last_seen_on_date">Last seen on %1$s</string>
+</resources>

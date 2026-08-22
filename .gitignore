@@ -1,0 +1,25 @@
+# Android / Gradle
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+**/build/
+/captures
+.externalNativeBuild
+.cxx
+*.apk
+*.aab
+
+# Secrets — never commit these
+keystore.properties
+*.jks
+*.keystore
+app/google-services.json
+app/pumpkin-google-services.json
+
+# Server (Node)
+server/node_modules/
+server/.env
+server/firebase-service-account.json
+*.log

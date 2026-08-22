@@ -1,0 +1,5 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base app theme for the Activity window; actual UI theming happens in
+         ui/theme/Theme.kt via Compose MaterialTheme. -->
+    <style name="Theme.Pumpkin" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
