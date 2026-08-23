@@ -37,7 +37,8 @@
             android:exported="true"
             android:excludeFromRecents="true"
             android:label="@string/app_display_label"
-            android:theme="@style/Theme.Pumpkin">
+            android:theme="@style/Theme.Pumpkin"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
