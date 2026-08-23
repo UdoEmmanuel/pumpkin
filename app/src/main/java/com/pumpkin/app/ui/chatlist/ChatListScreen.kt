@@ -142,7 +142,10 @@ fun ChatListScreen(
                     Text(stringResource(R.string.chatlist_new_chat_hint_text))
                     OutlinedTextField(
                         value = partnerEmail,
-                        onValueChange = { partnerEmail = it },
+                        onValueChange = {
+                            partnerEmail = it
+                            viewModel.clearNewChatError()
+                        },
                         label = { Text(stringResource(R.string.chatlist_new_chat_email_hint)) },
                         modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                     )
