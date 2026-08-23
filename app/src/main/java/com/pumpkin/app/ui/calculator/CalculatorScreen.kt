@@ -30,7 +30,7 @@ private val KEYS = listOf(
     "4", "5", "6", "*",
     "1", "2", "3", "-",
     "0", ".", "=", "+",
-    "C"
+    "C", "⌫"
 )
 
 @Composable
@@ -43,6 +43,10 @@ fun CalculatorScreen(onSecretSequenceEntered: () -> Unit) {
             "C" -> {
                 expression = ""
                 display = "0"
+            }
+            "⌫" -> {
+                expression = expression.dropLast(1)
+                display = expression.ifEmpty { "0" }
             }
             "=" -> {
                 val attempt = expression + "="
