@@ -10,7 +10,10 @@ data class MessageDto(
     val sentAt: Long,
     val deliveredAt: Long?,
     val readAt: Map<String, Long>,
-    val exitedAtAfterRead: Map<String, Long>
+    val exitedAtAfterRead: Map<String, Long>,
+    val replyToMessageId: String? = null,
+    val replyToSenderId: String? = null,
+    val replyToText: String? = null
 ) {
     fun toModel() = Message(
         id = id,
@@ -20,6 +23,9 @@ data class MessageDto(
         sentAt = sentAt,
         deliveredAt = deliveredAt,
         readAt = readAt,
-        exitedAtAfterRead = exitedAtAfterRead
+        exitedAtAfterRead = exitedAtAfterRead,
+        replyToMessageId = replyToMessageId,
+        replyToSenderId = replyToSenderId,
+        replyToText = replyToText
     )
 }

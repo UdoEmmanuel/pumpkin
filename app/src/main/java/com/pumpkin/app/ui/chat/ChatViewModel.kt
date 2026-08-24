@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -22,7 +23,7 @@ private const val TYPING_EXPIRY_MS = 3_000L
 
 class ChatViewModel(
     private val repository: ChatRepository,
-    private val chatId: String,
+    val chatId: String,
     val currentUserId: String
 ) : ViewModel() {
 
@@ -89,6 +90,42 @@ class ChatViewModel(
     private val _partnerPresence = MutableStateFlow<PresenceUpdate?>(null)
     val partnerPresence: StateFlow<PresenceUpdate?> = _partnerPresence.asStateFlow()
 
+    // The raw nickname (not falling back to the real name, unlike
+    // otherParticipantName) — null means "no nickname set", which is what
+    // the nickname-editing dialog needs to show an empty field rather than
+    // pre-filling it with the partner's real name.
+    val currentNickname: StateFlow<String?> = combine(chatFlow, otherParticipantId) { chat, otherId ->
+        if (chat != null && otherId != null) chat.nicknames[otherId] else null
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    private val _nicknameError = MutableStateFlow<String?>(null)
+    val nicknameError: StateFlow<String?> = _nicknameError.asStateFlow()
+
+    fun setNickname(nickname: String) {
+        val otherId = otherParticipantId.value ?: return
+        viewModelScope.launch {
+            repository.setNickname(chatId, otherId, nickname)
+                .onSuccess { _nicknameError.value = null }
+                .onFailure { _nicknameError.value = it.message ?: "Couldn't set nickname" }
+        }
+    }
+
+    fun clearNicknameError() {
+        _nicknameError.value = null
+    }
+
+    private val _replyingTo = MutableStateFlow<Message?>(null)
+    val replyingTo: StateFlow<Message?> = _replyingTo.asStateFlow()
+
+    /** Called from the swipe-to-reply gesture on a message bubble. */
+    fun startReply(message: Message) {
+        _replyingTo.value = message
+    }
+
+    fun cancelReply() {
+        _replyingTo.value = null
+    }
+
     init {
         repository.startMessageSync(chatId, currentUserId)
 
@@ -117,14 +154,21 @@ class ChatViewModel(
 
     fun send(text: String) {
         if (text.isBlank()) return
+        val replyTo = _replyingTo.value
         // Optimistic clear, same as before this owned the field — plus the
         // draft it was backed by, so a sent message doesn't leave a stale
         // "Draft" indicator behind on the chat list.
         _input.value = ""
+        _replyingTo.value = null
         repository.saveDraftAsync(chatId, "")
         viewModelScope.launch {
             try {
-                repository.sendMessage(chatId, currentUserId, text)
+                repository.sendMessage(
+                    chatId, currentUserId, text,
+                    replyToMessageId = replyTo?.id,
+                    replyToSenderId = replyTo?.senderId,
+                    replyToText = replyTo?.text
+                )
                 _sendError.value = null
             } catch (e: CancellationException) {
                 throw e

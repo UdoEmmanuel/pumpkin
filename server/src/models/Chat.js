@@ -8,6 +8,12 @@ const chatSchema = new mongoose.Schema(
     _id: { type: String, required: true },
     participantIds: { type: [String], required: true },
     participantNames: { type: Map, of: String, default: {} },
+    // uid -> nickname a participant of THIS chat set for that uid. Layered
+    // on top of participantNames rather than overwriting it: a nickname is
+    // scoped to this one conversation and visible to both people in it, but
+    // never touches the target's real displayName (which is what shows in
+    // any other chat they're part of, and what /api/users/me PATCH updates).
+    nicknames: { type: Map, of: String, default: {} },
     // uid -> last-typed-at epoch millis (0 = not typing). Ephemeral by
     // nature — fine to keep on the chat doc rather than a separate store.
     typing: { type: Map, of: Number, default: {} },

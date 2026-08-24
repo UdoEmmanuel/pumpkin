@@ -96,11 +96,49 @@ router.delete(
   })
 );
 
+// PATCH /api/chats/:chatId/nickname { targetUserId, nickname } — sets (or,
+// with an empty nickname, clears) what the OTHER participant is called
+// within this one chat. Visible to both people in the chat (it's stored on
+// the shared chat doc, same as participantNames), but never touches
+// targetUserId's actual User.displayName — a nickname set here has no
+// effect on any other conversation that user is part of.
+router.patch(
+  "/:chatId/nickname",
+  asyncHandler(async (req, res) => {
+    const chat = await Chat.findById(req.params.chatId);
+    if (!chat) {
+      return res.status(404).json({ error: "Chat not found" });
+    }
+    if (!chat.participantIds.includes(req.userId)) {
+      return res.status(403).json({ error: "Not a participant in this chat" });
+    }
+    const targetUserId = req.body.targetUserId;
+    if (!chat.participantIds.includes(targetUserId)) {
+      return res.status(400).json({ error: "Not a participant in this chat" });
+    }
+
+    const nickname = (req.body.nickname || "").trim();
+    if (nickname) {
+      chat.nicknames.set(targetUserId, nickname);
+    } else {
+      chat.nicknames.delete(targetUserId);
+    }
+    await chat.save();
+
+    const io = req.app.get("io");
+    chat.participantIds.forEach((uid) => {
+      io.to(chatRoomFor(uid)).emit("chat:updated", toChatJson(chat));
+    });
+    res.json(toChatJson(chat));
+  })
+);
+
 function toChatJson(chat) {
   return {
     id: chat._id,
     participantIds: chat.participantIds,
     participantNames: Object.fromEntries(chat.participantNames || new Map()),
+    nicknames: Object.fromEntries(chat.nicknames || new Map()),
     createdAt: chat.createdAt
   };
 }
@@ -114,7 +152,10 @@ function toMessageJson(message) {
     sentAt: message.sentAt,
     deliveredAt: message.deliveredAt,
     readAt: Object.fromEntries(message.readAt || new Map()),
-    exitedAtAfterRead: Object.fromEntries(message.exitedAtAfterRead || new Map())
+    exitedAtAfterRead: Object.fromEntries(message.exitedAtAfterRead || new Map()),
+    replyToMessageId: message.replyToMessageId || null,
+    replyToSenderId: message.replyToSenderId || null,
+    replyToText: message.replyToText || null
   };
 }
 

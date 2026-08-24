@@ -8,10 +8,11 @@ import androidx.room.TypeConverters
 
 @Database(
     entities = [MessageEntity::class, ChatEntity::class, DraftEntity::class],
-    // Bumped from 2: added the `drafts` table. fallbackToDestructiveMigration()
-    // below wipes and recreates the local (ephemeral, server-backed) tables on any
-    // version increase — remember to bump this again for the next schema change.
-    version = 3,
+    // Bumped from 4: MessageEntity gained the swipe-to-reply fields.
+    // fallbackToDestructiveMigration() below wipes and recreates the local
+    // (ephemeral, server-backed) tables on any version increase — remember
+    // to bump this again for the next schema change.
+    version = 5,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

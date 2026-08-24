@@ -10,9 +10,13 @@ import com.pumpkin.app.data.model.Chat
 import com.pumpkin.app.data.model.Message
 import com.pumpkin.app.data.remote.NetworkModule
 import com.pumpkin.app.data.remote.api.ChatApi
+import com.pumpkin.app.data.remote.api.dto.SetNicknameRequest
 import com.pumpkin.app.data.remote.api.dto.StartChatRequest
 import com.pumpkin.app.data.remote.socket.PresenceUpdate
 import com.pumpkin.app.data.remote.socket.PumpkinSocket
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -42,6 +46,27 @@ class ChatRepository(
 ) {
     private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var globalMirrorStarted = false
+
+    init {
+        // Presence is "has an open socket," and Android does NOT tear down
+        // that socket just because the app was backgrounded — the process
+        // (and its TCP connection) can keep running for a while. Without
+        // this, a partner who backgrounds the app stays "online" until the
+        // OS eventually kills the process or the connection times out,
+        // instead of flipping to offline right away. Manually disconnecting
+        // on background and reconnecting on foreground makes presence
+        // actually track "is the app in front of them," matching what
+        // "online" implies to a user glancing at the chat header.
+        ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onStop(owner: LifecycleOwner) {
+                socket.disconnect()
+            }
+
+            override fun onStart(owner: LifecycleOwner) {
+                repositoryScope.launch { socket.connect() }
+            }
+        })
+    }
 
     fun observeChats(): Flow<List<Chat>> =
         chatDao.observeChats().map { list -> list.map { it.toModel() } }
@@ -131,8 +156,16 @@ class ChatRepository(
      * ignores any client-supplied identity and always uses the uid it
      * verified from the auth token, so a caller can't spoof another sender.
      */
-    suspend fun sendMessage(chatId: String, senderId: String, text: String) {
-        val message = socket.sendMessage(chatId, text).getOrElseNetworkError()
+    suspend fun sendMessage(
+        chatId: String,
+        senderId: String,
+        text: String,
+        replyToMessageId: String? = null,
+        replyToSenderId: String? = null,
+        replyToText: String? = null
+    ) {
+        val message = socket.sendMessage(chatId, text, replyToMessageId, replyToSenderId, replyToText)
+            .getOrElseNetworkError()
         messageDao.upsert(MessageEntity.fromModel(message.toModel()))
     }
 
@@ -208,6 +241,19 @@ class ChatRepository(
             Result.success(Unit)
         } catch (e: HttpException) {
             Result.failure(IllegalStateException(e.errorMessage() ?: "Couldn't delete chat"))
+        } catch (e: IOException) {
+            Result.failure(IllegalStateException("Couldn't reach the server — is it running?"))
+        }
+    }
+
+    /** Empty nickname clears it. Sets what [targetUserId] is called within [chatId] — see server/src/models/Chat.js. */
+    suspend fun setNickname(chatId: String, targetUserId: String, nickname: String): Result<Unit> {
+        return try {
+            val dto = api.setNickname(chatId, SetNicknameRequest(targetUserId, nickname))
+            chatDao.upsert(ChatEntity.fromModel(dto.toModel()))
+            Result.success(Unit)
+        } catch (e: HttpException) {
+            Result.failure(IllegalStateException(e.errorMessage() ?: "Couldn't set nickname"))
         } catch (e: IOException) {
             Result.failure(IllegalStateException("Couldn't reach the server — is it running?"))
         }

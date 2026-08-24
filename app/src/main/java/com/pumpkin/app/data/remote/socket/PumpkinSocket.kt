@@ -103,8 +103,20 @@ class PumpkinSocket {
         socket?.emit("chat:join", chatId)
     }
 
-    suspend fun sendMessage(chatId: String, text: String): Result<MessageDto> =
-        emitWithAck("message:send", JSONObject().put("chatId", chatId).put("text", text)) { response ->
+    suspend fun sendMessage(
+        chatId: String,
+        text: String,
+        replyToMessageId: String? = null,
+        replyToSenderId: String? = null,
+        replyToText: String? = null
+    ): Result<MessageDto> =
+        emitWithAck(
+            "message:send",
+            JSONObject().put("chatId", chatId).put("text", text)
+                .put("replyToMessageId", replyToMessageId)
+                .put("replyToSenderId", replyToSenderId)
+                .put("replyToText", replyToText)
+        ) { response ->
             (response.get("message") as JSONObject).let { gson.fromJson(it.toString(), MessageDto::class.java) }
         }
 
