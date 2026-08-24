@@ -10,6 +10,10 @@ const userSchema = new mongoose.Schema(
     _id: { type: String, required: true }, // Firebase uid
     email: { type: String, required: true, index: true },
     displayName: { type: String, default: "" },
+    // Latest FCM registration token for silent background-message pings
+    // (PRD 4.3). Overwritten wholesale on every refresh — FCM tokens are
+    // single-slot per install, not additive.
+    fcmToken: { type: String, default: null },
     createdAt: { type: Number, required: true }
   },
   { versionKey: false, _id: false }

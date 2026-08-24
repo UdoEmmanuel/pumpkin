@@ -33,17 +33,18 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import com.pumpkin.app.R
 import com.pumpkin.app.data.model.Message
 import com.pumpkin.app.data.model.MessageStatus
@@ -63,7 +64,7 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
     val isPartnerTyping by viewModel.isPartnerTyping.collectAsState()
     val partnerPresence by viewModel.partnerPresence.collectAsState()
     val sendError by viewModel.sendError.collectAsState()
-    var input by remember { mutableStateOf("") }
+    val input by viewModel.input.collectAsState()
     val currentUserId = viewModel.currentUserId
 
     // PRD 4.4: mark every unread-by-me message as read as soon as it's
@@ -123,6 +124,12 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                             Text(
                                 text = otherParticipantName ?: "",
                                 fontSize = 16.sp,
+                                // Without an explicit lineHeight, Text falls back to the
+                                // ambient style's (e.g. 24sp) regardless of the fontSize
+                                // override above, which is what was pushing the name and
+                                // status line apart — this ties the line box to the text
+                                // itself instead.
+                                lineHeight = 16.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -142,6 +149,7 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                                 Text(
                                     text = it,
                                     fontSize = 12.sp,
+                                    lineHeight = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
@@ -158,14 +166,16 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             val listState = rememberLazyListState()
+            val coroutineScope = rememberCoroutineScope()
+            fun scrollToBottom() {
+                coroutineScope.launch {
+                    if (messages.isNotEmpty()) listState.animateScrollToItem(messages.size - 1)
+                }
+            }
             // Without this, a new message (yours or theirs) lands off-screen
             // at the bottom of the list with no indication it arrived —
             // you'd have to know to scroll down manually to see it.
-            LaunchedEffect(messages.size) {
-                if (messages.isNotEmpty()) {
-                    listState.animateScrollToItem(messages.size - 1)
-                }
-            }
+            LaunchedEffect(messages.size) { scrollToBottom() }
             LazyColumn(
                 state = listState,
                 modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp)
@@ -192,7 +202,6 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                 OutlinedTextField(
                     value = input,
                     onValueChange = {
-                        input = it
                         viewModel.onInputChanged(it)
                     },
                     placeholder = { Text(stringResource(R.string.chat_input_hint)) },
@@ -201,7 +210,11 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                         unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                         focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
                     ),
-                    modifier = Modifier.weight(1f)
+                    // Tapping the field is what opens the keyboard, so this is
+                    // the actual moment it's about to cover part of the
+                    // screen — jump to the latest message right then instead
+                    // of making the user scroll down manually to see it.
+                    modifier = Modifier.weight(1f).onFocusChanged { if (it.isFocused) scrollToBottom() }
                 )
                 Box(
                     modifier = Modifier
@@ -211,7 +224,7 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                         .background(MaterialTheme.colorScheme.primary),
                     contentAlignment = Alignment.Center
                 ) {
-                    IconButton(onClick = { viewModel.send(input); input = "" }) {
+                    IconButton(onClick = { viewModel.send(input) }) {
                         Icon(
                             Icons.AutoMirrored.Filled.Send,
                             contentDescription = stringResource(R.string.chat_send),

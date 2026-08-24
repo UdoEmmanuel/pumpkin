@@ -68,6 +68,34 @@ router.post(
   })
 );
 
+// DELETE /api/chats/:chatId — removes the chat and all its messages for
+// BOTH participants. There's no per-user "delete for me" concept here (the
+// same tradeoff as the rest of this app's ephemeral-by-design messaging) —
+// deleting a conversation deletes it, full stop, and notifies whichever
+// participant didn't initiate it so their client drops it too.
+router.delete(
+  "/:chatId",
+  asyncHandler(async (req, res) => {
+    const chat = await Chat.findById(req.params.chatId);
+    if (!chat) {
+      return res.status(404).json({ error: "Chat not found" });
+    }
+    if (!chat.participantIds.includes(req.userId)) {
+      return res.status(403).json({ error: "Not a participant in this chat" });
+    }
+
+    await Message.deleteMany({ chatId: chat._id });
+    await Chat.deleteOne({ _id: chat._id });
+
+    const io = req.app.get("io");
+    chat.participantIds.forEach((uid) => {
+      io.to(chatRoomFor(uid)).emit("chat:deleted", { chatId: chat._id });
+    });
+
+    res.json({ ok: true });
+  })
+);
+
 function toChatJson(chat) {
   return {
     id: chat._id,

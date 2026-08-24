@@ -22,4 +22,7 @@ interface ChatDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(chat: ChatEntity)
+
+    @Query("DELETE FROM chats WHERE id = :chatId")
+    suspend fun delete(chatId: String)
 }

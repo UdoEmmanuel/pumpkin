@@ -46,7 +46,7 @@ fun PumpkinNavHost(activity: FragmentActivity) {
     val navController: NavHostController = rememberNavController()
     val repository = remember(activity) {
         val db = (activity.application as PumpkinApp).database
-        ChatRepository(db.chatDao(), db.messageDao())
+        ChatRepository(db.chatDao(), db.messageDao(), db.draftDao())
     }
     val authRepository = remember { AuthRepository() }
     // Single source of truth for "is someone signed in" — both the post-lock
@@ -64,6 +64,16 @@ fun PumpkinNavHost(activity: FragmentActivity) {
     // app the moment it tried to write a Firestore update with that empty id
     // as part of a field path (see ChatRepository.updateTimestampField).
     val currentUser by remember { authRepository.observeAuthState() }.collectAsState(initial = null)
+
+    // Registers this install's FCM token on every cold start with an
+    // already-signed-in user (persisted Firebase session), not just right
+    // after an explicit sign-in — otherwise a user who signed in once and
+    // just reopens the app later would never get a token registered.
+    LaunchedEffect(currentUser?.uid) {
+        if (currentUser != null) {
+            authRepository.registerFcmTokenAsync()
+        }
+    }
 
     NavHost(navController = navController, startDestination = Routes.CALCULATOR) {
         composable(Routes.CALCULATOR) {

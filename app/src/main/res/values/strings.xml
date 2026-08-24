@@ -61,6 +61,9 @@
     <string name="chatlist_new_message_count">New Message (%d)</string>
     <string name="chatlist_no_new_message">No New Message</string>
     <string name="chatlist_unknown_partner">Unknown</string>
+    <string name="chatlist_draft">Draft</string>
+    <string name="chatlist_delete_chat">Delete conversation</string>
+    <string name="chatlist_delete_chat_confirm">Delete your conversation with %1$s? This deletes it for both of you.</string>
 
     <string name="chat_input_hint">Message</string>
     <string name="chat_send">Send</string>

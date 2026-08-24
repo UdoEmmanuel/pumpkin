@@ -72,4 +72,19 @@ router.patch(
   })
 );
 
+// POST /api/users/me/fcm-token { token } — registers/overwrites this user's
+// FCM registration token, called on every app start and token refresh (see
+// PumpkinMessagingService.onNewToken).
+router.post(
+  "/me/fcm-token",
+  asyncHandler(async (req, res) => {
+    const token = (req.body.token || "").trim();
+    if (!token) {
+      return res.status(400).json({ error: "Missing token" });
+    }
+    await User.updateOne({ _id: req.userId }, { $set: { fcmToken: token } }, { upsert: false });
+    res.json({ ok: true });
+  })
+);
+
 module.exports = { router };
