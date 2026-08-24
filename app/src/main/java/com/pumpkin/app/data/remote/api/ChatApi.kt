@@ -3,6 +3,7 @@ package com.pumpkin.app.data.remote.api
 import com.pumpkin.app.data.remote.api.dto.ChatDto
 import com.pumpkin.app.data.remote.api.dto.FcmTokenRequest
 import com.pumpkin.app.data.remote.api.dto.MessageDto
+import com.pumpkin.app.data.remote.api.dto.SetNicknameRequest
 import com.pumpkin.app.data.remote.api.dto.StartChatRequest
 import com.pumpkin.app.data.remote.api.dto.SyncUserRequest
 import com.pumpkin.app.data.remote.api.dto.UpdateDisplayNameRequest
@@ -26,6 +27,9 @@ interface ChatApi {
 
     @DELETE("api/chats/{chatId}")
     suspend fun deleteChat(@Path("chatId") chatId: String)
+
+    @PATCH("api/chats/{chatId}/nickname")
+    suspend fun setNickname(@Path("chatId") chatId: String, @Body request: SetNicknameRequest): ChatDto
 
     // Cascades to every chat's participantNames server-side — replaced the
     // old dedicated /api/chats/participant-name endpoint (see server/src/routes/users.js).

@@ -14,7 +14,13 @@ data class Message(
     val deliveredAt: Long? = null,
     val readAt: Map<String, Long> = emptyMap(),
     val exitedAtAfterRead: Map<String, Long> = emptyMap(),
-    val deletedAt: Long? = null
+    val deletedAt: Long? = null,
+    // Swipe-to-reply — snapshotted at send time (not just an id reference)
+    // so the quote still makes sense even if the original message
+    // auto-deletes later (PRD 4.4).
+    val replyToMessageId: String? = null,
+    val replyToSenderId: String? = null,
+    val replyToText: String? = null
 ) {
     fun statusFor(otherParticipantId: String): MessageStatus = when {
         readAt.containsKey(otherParticipantId) -> MessageStatus.READ

@@ -79,4 +79,11 @@
     <string name="chat_last_seen_days_ago">Last seen %1$d days ago</string>
     <string name="chat_last_seen_weeks_ago">Last seen %1$d weeks ago</string>
     <string name="chat_last_seen_on_date">Last seen on %1$s</string>
+    <string name="chat_nickname_menu">Nickname</string>
+    <string name="chat_notification_tone_menu">Notification tone</string>
+    <string name="chat_nickname_hint_text">Set what your partner is called in this conversation. Visible to both of you here — it doesn\'t change their name anywhere else.</string>
+    <string name="chat_nickname_field_label">Nickname</string>
+    <string name="chat_nickname_save">Save</string>
+    <string name="chat_reply_to_self">You</string>
+    <string name="chat_reply_cancel">Cancel reply</string>
 </resources>

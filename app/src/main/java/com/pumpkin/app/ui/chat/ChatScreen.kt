@@ -1,11 +1,19 @@
 package com.pumpkin.app.ui.chat
 
+import android.app.Activity
+import android.content.Intent
+import android.media.RingtoneManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,8 +24,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -26,6 +39,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -33,19 +47,30 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import com.pumpkin.app.R
+import com.pumpkin.app.data.local.NotificationToneStore
 import com.pumpkin.app.data.model.Message
 import com.pumpkin.app.data.model.MessageStatus
 import com.pumpkin.app.ui.theme.Avatar
@@ -66,6 +91,20 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
     val sendError by viewModel.sendError.collectAsState()
     val input by viewModel.input.collectAsState()
     val currentUserId = viewModel.currentUserId
+    val currentNickname by viewModel.currentNickname.collectAsState()
+    val replyingTo by viewModel.replyingTo.collectAsState()
+    val nicknameError by viewModel.nicknameError.collectAsState()
+    var showHeaderMenu by remember { mutableStateOf(false) }
+    var showNicknameDialog by remember { mutableStateOf(false) }
+    var nicknameInput by remember { mutableStateOf("") }
+
+    val context = LocalContext.current
+    val toneStore = remember { NotificationToneStore(context) }
+    val toneLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode != Activity.RESULT_OK) return@rememberLauncherForActivityResult
+        val uri = result.data?.getParcelableExtra<android.net.Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+        toneStore.set(viewModel.chatId, uri?.toString())
+    }
 
     // PRD 4.4: mark every unread-by-me message as read as soon as it's
     // visible on screen. The `!it.readAt.containsKey(currentUserId)` guard is
@@ -123,13 +162,20 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                         ) {
                             Text(
                                 text = otherParticipantName ?: "",
-                                fontSize = 16.sp,
-                                // Without an explicit lineHeight, Text falls back to the
-                                // ambient style's (e.g. 24sp) regardless of the fontSize
-                                // override above, which is what was pushing the name and
-                                // status line apart — this ties the line box to the text
-                                // itself instead.
-                                lineHeight = 16.sp,
+                                // fontSize/lineHeight alone still leave visible gap from
+                                // Android's legacy font padding (ascent/descent reserved
+                                // beyond the nominal em box) — includeFontPadding = false
+                                // plus a trimmed LineHeightStyle is what actually collapses
+                                // it, matching the tight two-line header this was meant to be.
+                                style = TextStyle(
+                                    fontSize = 16.sp,
+                                    lineHeight = 16.sp,
+                                    platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                    lineHeightStyle = LineHeightStyle(
+                                        alignment = LineHeightStyle.Alignment.Center,
+                                        trim = LineHeightStyle.Trim.Both
+                                    )
+                                ),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -148,8 +194,15 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                             statusText?.let {
                                 Text(
                                     text = it,
-                                    fontSize = 12.sp,
-                                    lineHeight = 12.sp,
+                                    style = TextStyle(
+                                        fontSize = 12.sp,
+                                        lineHeight = 12.sp,
+                                        platformStyle = PlatformTextStyle(includeFontPadding = false),
+                                        lineHeightStyle = LineHeightStyle(
+                                            alignment = LineHeightStyle.Alignment.Center,
+                                            trim = LineHeightStyle.Trim.Both
+                                        )
+                                    ),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
@@ -159,6 +212,38 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showHeaderMenu = true }) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = null)
+                    }
+                    DropdownMenu(expanded = showHeaderMenu, onDismissRequest = { showHeaderMenu = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.chat_nickname_menu)) },
+                            onClick = {
+                                showHeaderMenu = false
+                                nicknameInput = currentNickname ?: ""
+                                showNicknameDialog = true
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.chat_notification_tone_menu)) },
+                            onClick = {
+                                showHeaderMenu = false
+                                val intent = Intent(RingtoneManager.ACTION_RINGTONE_PICKER).apply {
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_NOTIFICATION)
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                                    putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true)
+                                    val existing = toneStore.get(viewModel.chatId)
+                                    putExtra(
+                                        RingtoneManager.EXTRA_RINGTONE_EXISTING_URI,
+                                        if (existing != null) android.net.Uri.parse(existing) else null
+                                    )
+                                }
+                                toneLauncher.launch(intent)
+                            }
+                        )
                     }
                 }
             )
@@ -184,7 +269,9 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                     MessageRow(
                         message = message,
                         currentUserId = currentUserId,
-                        otherParticipantId = otherParticipantId
+                        otherParticipantId = otherParticipantId,
+                        otherParticipantName = otherParticipantName,
+                        onReply = { viewModel.startReply(message) }
                     )
                 }
             }
@@ -194,6 +281,33 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
+            }
+            replyingTo?.let { reply ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
+                            .padding(8.dp)
+                    ) {
+                        Text(
+                            text = if (reply.senderId == currentUserId) {
+                                stringResource(R.string.chat_reply_to_self)
+                            } else {
+                                otherParticipantName ?: ""
+                            },
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(text = reply.text, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 13.sp)
+                    }
+                    IconButton(onClick = { viewModel.cancelReply() }) {
+                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.chat_reply_cancel))
+                    }
+                }
             }
             Row(
                 modifier = Modifier.fillMaxWidth().padding(12.dp),
@@ -235,14 +349,86 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
             }
         }
     }
+
+    if (showNicknameDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showNicknameDialog = false
+                viewModel.clearNicknameError()
+            },
+            title = { Text(stringResource(R.string.chat_nickname_menu)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.chat_nickname_hint_text))
+                    OutlinedTextField(
+                        value = nicknameInput,
+                        onValueChange = { nicknameInput = it },
+                        label = { Text(stringResource(R.string.chat_nickname_field_label)) },
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                    )
+                    nicknameError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.setNickname(nicknameInput)
+                    showNicknameDialog = false
+                }) {
+                    Text(stringResource(R.string.chat_nickname_save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showNicknameDialog = false
+                    viewModel.clearNicknameError()
+                }) {
+                    Text(stringResource(R.string.chatlist_new_chat_cancel))
+                }
+            }
+        )
+    }
 }
 
 @Composable
-private fun MessageRow(message: Message, currentUserId: String, otherParticipantId: String?) {
+private fun MessageRow(
+    message: Message,
+    currentUserId: String,
+    otherParticipantId: String?,
+    otherParticipantName: String?,
+    onReply: () -> Unit
+) {
     val isOwnMessage = message.senderId == currentUserId
+    val offsetX = remember { Animatable(0f) }
+    val coroutineScope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val replyThresholdPx = with(density) { 56.dp.toPx() }
+    val maxDragPx = with(density) { 84.dp.toPx() }
+
     Column(
         horizontalAlignment = if (isOwnMessage) Alignment.End else Alignment.Start,
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+            // Swipe right anywhere on a bubble to reply — snaps back
+            // afterward rather than actually moving the message, same
+            // interaction as WhatsApp/Telegram's reply gesture.
+            .pointerInput(message.id) {
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        coroutineScope.launch {
+                            if (offsetX.value > replyThresholdPx) onReply()
+                            offsetX.animateTo(0f)
+                        }
+                    },
+                    onHorizontalDrag = { change, dragAmount ->
+                        change.consume()
+                        coroutineScope.launch {
+                            offsetX.snapTo((offsetX.value + dragAmount).coerceIn(0f, maxDragPx))
+                        }
+                    }
+                )
+            }
     ) {
         Box(
             modifier = Modifier
@@ -253,10 +439,42 @@ private fun MessageRow(message: Message, currentUserId: String, otherParticipant
                 )
                 .padding(horizontal = 14.dp, vertical = 10.dp)
         ) {
-            Text(
-                text = message.text,
-                color = if (isOwnMessage) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Column {
+                if (message.replyToText != null) {
+                    val replySenderLabel = if (message.replyToSenderId == currentUserId) {
+                        stringResource(R.string.chat_reply_to_self)
+                    } else {
+                        otherParticipantName ?: ""
+                    }
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                (if (isOwnMessage) Color.White else MaterialTheme.colorScheme.onSurfaceVariant)
+                                    .copy(alpha = 0.15f),
+                                RoundedCornerShape(6.dp)
+                            )
+                            .padding(6.dp)
+                    ) {
+                        Text(
+                            text = replySenderLabel,
+                            fontSize = 11.sp,
+                            color = if (isOwnMessage) Color.White else MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = message.replyToText,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = if (isOwnMessage) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Text(
+                    text = message.text,
+                    color = if (isOwnMessage) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         Row(
             verticalAlignment = Alignment.CenterVertically,

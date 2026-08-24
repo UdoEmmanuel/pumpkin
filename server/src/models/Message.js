@@ -11,7 +11,13 @@ const messageSchema = new mongoose.Schema(
     sentAt: { type: Number, required: true },
     deliveredAt: { type: Number, default: null },
     readAt: { type: Map, of: Number, default: {} },
-    exitedAtAfterRead: { type: Map, of: Number, default: {} }
+    exitedAtAfterRead: { type: Map, of: Number, default: {} },
+    // Swipe-to-reply. Snapshotted (not just an id reference) because the
+    // original message can auto-delete out from under this one (PRD 4.4) —
+    // the quote needs to keep making sense even after that happens.
+    replyToMessageId: { type: String, default: null },
+    replyToSenderId: { type: String, default: null },
+    replyToText: { type: String, default: null }
   },
   { versionKey: false, _id: false }
 );

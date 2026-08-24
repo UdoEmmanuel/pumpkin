@@ -9,14 +9,15 @@ data class ChatEntity(
     @PrimaryKey val id: String,
     val participantIds: List<String>,
     val participantNames: Map<String, String>,
+    val nicknames: Map<String, String> = emptyMap(),
     val createdAt: Long
 ) {
     // typing is intentionally omitted — it's a live-only Firestore signal,
     // never mirrored into Room (see Chat.typing kdoc).
-    fun toModel() = Chat(id, participantIds, participantNames, createdAt = createdAt)
+    fun toModel() = Chat(id, participantIds, participantNames, nicknames, createdAt = createdAt)
 
     companion object {
         fun fromModel(chat: Chat) =
-            ChatEntity(chat.id, chat.participantIds, chat.participantNames, chat.createdAt)
+            ChatEntity(chat.id, chat.participantIds, chat.participantNames, chat.nicknames, chat.createdAt)
     }
 }

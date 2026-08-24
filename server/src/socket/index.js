@@ -61,7 +61,7 @@ function attachSocketHandlers(io) {
 
     socket.on("chat:join", (chatId) => socket.join(chatMessageRoom(chatId)));
 
-    socket.on("message:send", async ({ chatId, text }, ack) => {
+    socket.on("message:send", async ({ chatId, text, replyToMessageId, replyToSenderId, replyToText }, ack) => {
       console.log(`[send] chat=${chatId} from=${socket.userId} text=${JSON.stringify(text)}`);
       try {
         const message = await Message.create({
@@ -69,7 +69,10 @@ function attachSocketHandlers(io) {
           chatId,
           senderId: socket.userId,
           text,
-          sentAt: Date.now()
+          sentAt: Date.now(),
+          replyToMessageId: replyToMessageId || null,
+          replyToSenderId: replyToSenderId || null,
+          replyToText: replyToText || null
         });
         io.to(chatMessageRoom(chatId)).emit("message:new", toMessageJson(message));
         ack?.({ ok: true, message: toMessageJson(message) });

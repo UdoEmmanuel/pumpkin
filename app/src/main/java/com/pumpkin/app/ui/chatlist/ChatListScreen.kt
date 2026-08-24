@@ -12,9 +12,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -55,6 +58,7 @@ fun ChatListScreen(
     var showNewChatDialog by remember { mutableStateOf(false) }
     var partnerEmail by remember { mutableStateOf("") }
     var chatPendingDelete by remember { mutableStateOf<ChatListItem?>(null) }
+    var showOverflowMenu by remember { mutableStateOf(false) }
     val unknownPartnerLabel = stringResource(R.string.chatlist_unknown_partner)
 
     Scaffold(
@@ -62,14 +66,31 @@ fun ChatListScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.chatlist_title)) },
                 actions = {
-                    TextButton(onClick = onEditName) {
-                        Text(stringResource(R.string.chatlist_edit_name_action))
+                    IconButton(onClick = { showOverflowMenu = true }) {
+                        Icon(Icons.Filled.MoreVert, contentDescription = null)
                     }
-                    TextButton(onClick = onChangePin) {
-                        Text(stringResource(R.string.chatlist_change_pin_action))
-                    }
-                    TextButton(onClick = onSignOut) {
-                        Text(stringResource(R.string.auth_sign_out))
+                    DropdownMenu(expanded = showOverflowMenu, onDismissRequest = { showOverflowMenu = false }) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.chatlist_edit_name_action)) },
+                            onClick = {
+                                showOverflowMenu = false
+                                onEditName()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.chatlist_change_pin_action)) },
+                            onClick = {
+                                showOverflowMenu = false
+                                onChangePin()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.auth_sign_out)) },
+                            onClick = {
+                                showOverflowMenu = false
+                                onSignOut()
+                            }
+                        )
                     }
                 }
             )
