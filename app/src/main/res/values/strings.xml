@@ -64,6 +64,14 @@
     <string name="chatlist_draft">Draft</string>
     <string name="chatlist_delete_chat">Delete conversation</string>
     <string name="chatlist_delete_chat_confirm">Delete your conversation with %1$s? This deletes it for both of you.</string>
+    <string name="chatlist_update_app_action">Update app</string>
+    <string name="chatlist_update_checking">Checking for updates…</string>
+    <string name="chatlist_update_up_to_date">You\'re on the latest version</string>
+    <string name="chatlist_update_available">Update to %1$s?</string>
+    <string name="chatlist_update_action">Update</string>
+    <string name="chatlist_update_downloading">Downloading update…</string>
+    <string name="chatlist_update_error">Couldn\'t check for updates</string>
+    <string name="chatlist_update_ok">OK</string>
 
     <string name="chat_input_hint">Message</string>
     <string name="chat_send">Send</string>

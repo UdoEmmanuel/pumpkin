@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Update APKs are downloaded into the app's own cache dir — this exposes
+     just that subdirectory to the FileProvider, not the whole filesystem. -->
+<paths>
+    <cache-path name="updates" path="updates/" />
+</paths>

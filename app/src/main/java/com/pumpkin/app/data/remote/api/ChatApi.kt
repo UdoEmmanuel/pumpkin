@@ -1,5 +1,6 @@
 package com.pumpkin.app.data.remote.api
 
+import com.pumpkin.app.data.remote.api.dto.AppVersionDto
 import com.pumpkin.app.data.remote.api.dto.ChatDto
 import com.pumpkin.app.data.remote.api.dto.FcmTokenRequest
 import com.pumpkin.app.data.remote.api.dto.MessageDto
@@ -8,12 +9,14 @@ import com.pumpkin.app.data.remote.api.dto.StartChatRequest
 import com.pumpkin.app.data.remote.api.dto.SyncUserRequest
 import com.pumpkin.app.data.remote.api.dto.UpdateDisplayNameRequest
 import com.pumpkin.app.data.remote.api.dto.UserDto
+import okhttp3.ResponseBody
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Streaming
 
 interface ChatApi {
     @GET("api/chats")
@@ -44,4 +47,11 @@ interface ChatApi {
 
     @POST("api/users/me/fcm-token")
     suspend fun registerFcmToken(@Body request: FcmTokenRequest)
+
+    @GET("api/app/latest")
+    suspend fun getLatestVersion(): AppVersionDto
+
+    @Streaming
+    @GET("api/app/download")
+    suspend fun downloadLatestApk(): ResponseBody
 }

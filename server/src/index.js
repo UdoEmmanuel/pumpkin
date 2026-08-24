@@ -7,6 +7,7 @@ const { Server } = require("socket.io");
 
 const { router: chatsRouter } = require("./routes/chats");
 const { router: usersRouter } = require("./routes/users");
+const { router: appRouter } = require("./routes/app");
 const { attachSocketHandlers } = require("./socket");
 const { startTtlSweep } = require("./ttlSweep");
 
@@ -17,6 +18,7 @@ app.use(express.json());
 app.get("/health", (_req, res) => res.json({ ok: true }));
 app.use("/api/chats", chatsRouter);
 app.use("/api/users", usersRouter);
+app.use("/api/app", appRouter);
 
 // Safety net: without this, an error thrown from an async route handler
 // (even one wrapped in asyncHandler, which forwards it here via next(err))
