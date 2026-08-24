@@ -59,6 +59,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
@@ -145,6 +148,23 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
         onDispose {
             seenMessageIds.forEach { viewModel.onExitAfterRead(it) }
         }
+    }
+    // The above only fires on in-app navigation away from this screen —
+    // backgrounding the app (home button, switching apps, the OS killing the
+    // process later) leaves this composable in place, so "exited" never got
+    // reported and auto-delete could never trigger for a chat left open like
+    // that. ON_STOP covers exactly that case: the moment the app stops being
+    // visible, whatever's been read so far on this screen counts as exited,
+    // same as actually navigating back.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                seenMessageIds.forEach { viewModel.onExitAfterRead(it) }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     Scaffold(

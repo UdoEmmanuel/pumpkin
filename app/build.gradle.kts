@@ -28,8 +28,11 @@ android {
         applicationId = "com.pumpkin.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        // Bump both on every release — the in-app updater (ChatListScreen's
+        // "Update app") compares versionName against the latest GitHub tag
+        // to decide whether an update is available.
+        versionCode = 6
+        versionName = "0.5.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -75,6 +78,9 @@ android {
 
     buildFeatures {
         compose = true
+        // Exposes BuildConfig.VERSION_NAME — the in-app updater reads this
+        // to compare against the latest GitHub release tag.
+        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.14"
