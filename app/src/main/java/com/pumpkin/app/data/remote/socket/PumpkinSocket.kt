@@ -18,6 +18,7 @@ import kotlin.coroutines.resume
 
 data class TypingUpdate(val chatId: String, val userId: String, val isTyping: Boolean)
 data class DeletedMessage(val chatId: String, val messageId: String)
+data class DeletedChat(val chatId: String)
 data class PresenceUpdate(val userId: String, val online: Boolean, val lastSeenAt: Long?)
 
 /**
@@ -43,6 +44,9 @@ class PumpkinSocket {
 
     private val _chatUpdated = MutableSharedFlow<ChatDto>(extraBufferCapacity = 16)
     val chatUpdated: SharedFlow<ChatDto> = _chatUpdated
+
+    private val _chatDeleted = MutableSharedFlow<DeletedChat>(extraBufferCapacity = 16)
+    val chatDeleted: SharedFlow<DeletedChat> = _chatDeleted
 
     private val _typingUpdate = MutableSharedFlow<TypingUpdate>(extraBufferCapacity = 64)
     val typingUpdate: SharedFlow<TypingUpdate> = _typingUpdate
@@ -72,6 +76,9 @@ class PumpkinSocket {
         }
         s.on("chat:new") { args -> (args.getOrNull(0) as? JSONObject)?.let { emit(_chatNew, it, ChatDto::class.java) } }
         s.on("chat:updated") { args -> (args.getOrNull(0) as? JSONObject)?.let { emit(_chatUpdated, it, ChatDto::class.java) } }
+        s.on("chat:deleted") { args ->
+            (args.getOrNull(0) as? JSONObject)?.let { _chatDeleted.tryEmit(DeletedChat(it.getString("chatId"))) }
+        }
         s.on("typing:update") { args ->
             (args.getOrNull(0) as? JSONObject)?.let {
                 _typingUpdate.tryEmit(

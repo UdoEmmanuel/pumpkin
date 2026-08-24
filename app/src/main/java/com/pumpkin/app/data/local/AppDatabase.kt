@@ -7,17 +7,18 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
 @Database(
-    entities = [MessageEntity::class, ChatEntity::class],
-    // Bumped from 1: ChatEntity gained `participantNames`. fallbackToDestructiveMigration()
-    // below wipes and recreates the local (ephemeral, Firestore-backed) tables on any
+    entities = [MessageEntity::class, ChatEntity::class, DraftEntity::class],
+    // Bumped from 2: added the `drafts` table. fallbackToDestructiveMigration()
+    // below wipes and recreates the local (ephemeral, server-backed) tables on any
     // version increase — remember to bump this again for the next schema change.
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun messageDao(): MessageDao
     abstract fun chatDao(): ChatDao
+    abstract fun draftDao(): DraftDao
 
     companion object {
         @Volatile private var instance: AppDatabase? = null

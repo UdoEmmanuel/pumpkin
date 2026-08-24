@@ -101,6 +101,9 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.4")
+    // ProcessLifecycleOwner — lets PumpkinMessagingService tell whether the
+    // app is foregrounded before deciding to play the background message sound.
+    implementation("androidx.lifecycle:lifecycle-process:2.8.4")
 
     // Biometric / app lock — BiometricPrompt requires a FragmentActivity host.
     implementation("androidx.biometric:biometric:1.1.0")

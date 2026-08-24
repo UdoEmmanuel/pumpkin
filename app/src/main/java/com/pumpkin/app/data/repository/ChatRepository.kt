@@ -2,6 +2,8 @@ package com.pumpkin.app.data.repository
 
 import com.pumpkin.app.data.local.ChatDao
 import com.pumpkin.app.data.local.ChatEntity
+import com.pumpkin.app.data.local.DraftDao
+import com.pumpkin.app.data.local.DraftEntity
 import com.pumpkin.app.data.local.MessageDao
 import com.pumpkin.app.data.local.MessageEntity
 import com.pumpkin.app.data.model.Chat
@@ -34,6 +36,7 @@ import java.io.IOException
 class ChatRepository(
     private val chatDao: ChatDao,
     private val messageDao: MessageDao,
+    private val draftDao: DraftDao,
     private val api: ChatApi = NetworkModule.chatApi,
     private val socket: PumpkinSocket = NetworkModule.socket
 ) {
@@ -97,6 +100,9 @@ class ChatRepository(
         }
         repositoryScope.launch {
             socket.chatUpdated.collect { chatDao.upsert(ChatEntity.fromModel(it.toModel())) }
+        }
+        repositoryScope.launch {
+            socket.chatDeleted.collect { deleteChatLocally(it.chatId) }
         }
     }
 
@@ -187,6 +193,49 @@ class ChatRepository(
             Result.failure(IllegalStateException("Couldn't reach the server — is it running?"))
         }
     }
+
+    /**
+     * Deletes the chat for both participants (see server/src/routes/chats.js
+     * — there's no per-user "delete for me" concept here). Removes the
+     * server copy first; the local mirror only follows once that's
+     * confirmed, so a failed request (offline, etc.) doesn't make the chat
+     * vanish locally while it's still sitting on the server.
+     */
+    suspend fun deleteChat(chatId: String): Result<Unit> {
+        return try {
+            api.deleteChat(chatId)
+            deleteChatLocally(chatId)
+            Result.success(Unit)
+        } catch (e: HttpException) {
+            Result.failure(IllegalStateException(e.errorMessage() ?: "Couldn't delete chat"))
+        } catch (e: IOException) {
+            Result.failure(IllegalStateException("Couldn't reach the server — is it running?"))
+        }
+    }
+
+    private suspend fun deleteChatLocally(chatId: String) {
+        messageDao.deleteAllForChat(chatId)
+        draftDao.clear(chatId)
+        chatDao.delete(chatId)
+    }
+
+    fun observeDraft(chatId: String): Flow<String?> =
+        draftDao.observeAll().map { it.firstOrNull { d -> d.chatId == chatId }?.text }
+
+    suspend fun getDraft(chatId: String): String? = draftDao.get(chatId)?.text
+
+    /** Empty/blank text clears the draft rather than storing an empty row. */
+    suspend fun saveDraft(chatId: String, text: String) {
+        if (text.isBlank()) draftDao.clear(chatId) else draftDao.upsert(DraftEntity(chatId, text))
+    }
+
+    fun saveDraftAsync(chatId: String, text: String) {
+        repositoryScope.launch { saveDraft(chatId, text) }
+    }
+
+    /** chatId -> draft text, for the chat list's "Draft" indicator. */
+    fun observeAllDrafts(): Flow<Map<String, String>> =
+        draftDao.observeAll().map { list -> list.associate { it.chatId to it.text } }
 
     private fun HttpException.errorMessage(): String? =
         runCatching {

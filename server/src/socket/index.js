@@ -1,7 +1,8 @@
 const { randomUUID } = require("crypto");
 const Chat = require("../models/Chat");
 const Message = require("../models/Message");
-const { verifyIdToken } = require("../firebaseAdmin");
+const User = require("../models/User");
+const { verifyIdToken, sendDataMessage } = require("../firebaseAdmin");
 const { isEligibleForAutoDelete } = require("../messageEligibility");
 const { toMessageJson, chatRoomFor } = require("../routes/chats");
 const presence = require("../presence");
@@ -72,6 +73,23 @@ function attachSocketHandlers(io) {
         });
         io.to(chatMessageRoom(chatId)).emit("message:new", toMessageJson(message));
         ack?.({ ok: true, message: toMessageJson(message) });
+
+        // Silent background ping (PRD 4.3) — always sent regardless of the
+        // recipient's live socket status; a foregrounded recipient's client
+        // just gets a harmless duplicate signal alongside the socket event
+        // it already received. Fire-and-forget: never let a push failure
+        // affect the message-send response above, which is already sent.
+        const chat = await Chat.findById(chatId);
+        const recipientId = chat?.participantIds.find((id) => id !== socket.userId);
+        if (recipientId) {
+          const recipient = await User.findById(recipientId);
+          if (recipient?.fcmToken) {
+            sendDataMessage(recipient.fcmToken, {
+              type: "new_message",
+              chatId
+            });
+          }
+        }
       } catch (e) {
         ack?.({ ok: false, error: e.message });
       }

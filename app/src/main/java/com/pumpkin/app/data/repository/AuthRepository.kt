@@ -3,9 +3,11 @@ package com.pumpkin.app.data.repository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.messaging.FirebaseMessaging
 import com.pumpkin.app.data.model.User
 import com.pumpkin.app.data.remote.NetworkModule
 import com.pumpkin.app.data.remote.api.ChatApi
+import com.pumpkin.app.data.remote.api.dto.FcmTokenRequest
 import com.pumpkin.app.data.remote.api.dto.SyncUserRequest
 import com.pumpkin.app.data.remote.api.dto.UpdateDisplayNameRequest
 import kotlinx.coroutines.CoroutineScope
@@ -80,6 +82,24 @@ class AuthRepository(
     private fun syncUserAsync(displayName: String) {
         repositoryScope.launch {
             runCatching { api.syncUser(SyncUserRequest(displayName)) }
+        }
+    }
+
+    /**
+     * Registers this install's current FCM token against the signed-in
+     * user, so the server can silently push a background-sound signal to it
+     * (PRD 4.3). Called on every app start with a signed-in user (see
+     * PumpkinNavHost) and again from PumpkinMessagingService.onNewToken
+     * whenever FCM rotates the token — both paths funnel through here so
+     * there's one place this logic lives.
+     */
+    fun registerFcmTokenAsync() {
+        repositoryScope.launch {
+            runCatching {
+                val token = FirebaseMessaging.getInstance().token.await()
+                android.util.Log.d("PumpkinFCM", "Registering FCM token: $token")
+                api.registerFcmToken(FcmTokenRequest(token))
+            }.onFailure { android.util.Log.e("PumpkinFCM", "Failed to register FCM token", it) }
         }
     }
 }

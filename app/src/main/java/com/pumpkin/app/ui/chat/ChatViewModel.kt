@@ -51,6 +51,13 @@ class ChatViewModel(
     private val _sendError = MutableStateFlow<String?>(null)
     val sendError: StateFlow<String?> = _sendError.asStateFlow()
 
+    // Owned here (not as Compose-local state in ChatScreen) so it survives
+    // navigating away and back, and so it can be seeded from — and persisted
+    // as — a draft (see repository.getDraft/saveDraft) that outlives this
+    // ViewModel too, i.e. survives the app being closed entirely.
+    private val _input = MutableStateFlow("")
+    val input: StateFlow<String> = _input.asStateFlow()
+
     // Re-subscribes to the typing timestamp whenever otherParticipantId
     // resolves, then re-evaluates recency every tick so the indicator clears
     // itself ~3s after the partner stops typing even without a new Firestore
@@ -85,6 +92,10 @@ class ChatViewModel(
     init {
         repository.startMessageSync(chatId, currentUserId)
 
+        viewModelScope.launch {
+            _input.value = repository.getDraft(chatId) ?: ""
+        }
+
         // One-shot fetch of the partner's current status the moment we know
         // who they are, then switch to live updates for as long as we're
         // typing/observing this screen.
@@ -106,6 +117,11 @@ class ChatViewModel(
 
     fun send(text: String) {
         if (text.isBlank()) return
+        // Optimistic clear, same as before this owned the field — plus the
+        // draft it was backed by, so a sent message doesn't leave a stale
+        // "Draft" indicator behind on the chat list.
+        _input.value = ""
+        repository.saveDraftAsync(chatId, "")
         viewModelScope.launch {
             try {
                 repository.sendMessage(chatId, currentUserId, text)
@@ -120,8 +136,11 @@ class ChatViewModel(
         broadcastTyping(isTyping = false, force = true)
     }
 
-    /** Called on every keystroke in the input field — throttled so we're not writing on every character. */
+    /** Called on every keystroke in the input field — typing broadcasts are throttled, draft saves are not (cheap local writes). */
     fun onInputChanged(text: String) {
+        _input.value = text
+        repository.saveDraftAsync(chatId, text)
+
         val now = System.currentTimeMillis()
         if (text.isBlank()) {
             broadcastTyping(isTyping = false, force = true)
