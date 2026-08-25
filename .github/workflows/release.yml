@@ -44,6 +44,11 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      # Gitignored, never committed — the Google Services plugin (Firebase)
+      # can't run without it, same reasoning as the keystore below.
+      - name: Restore google-services.json
+        run: echo "${{ secrets.PUMPKIN_GOOGLE_SERVICES_JSON_BASE64 }}" | base64 -d > app/google-services.json
+
       # Same signing key every release keeps the in-app "Update app" install
       # path working (Android refuses to install an update signed with a
       # different key than what's already on the device) — see keystore.properties.example.
