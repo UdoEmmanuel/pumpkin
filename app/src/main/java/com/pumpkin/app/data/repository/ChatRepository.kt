@@ -46,6 +46,7 @@ class ChatRepository(
 ) {
     private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var globalMirrorStarted = false
+    private var lastKnownUserId: String? = null
 
     init {
         // Presence is "has an open socket," and Android does NOT tear down
@@ -57,13 +58,23 @@ class ChatRepository(
         // on background and reconnecting on foreground makes presence
         // actually track "is the app in front of them," matching what
         // "online" implies to a user glancing at the chat header.
+        //
+        // The cost of that disconnect: any message sent to this user while
+        // their socket was down never arrives as a live 'message:new' event
+        // — which was the only thing that (a) marked it delivered and (b)
+        // put it in Room so the chat list's unread count would notice it.
+        // A REST resync on every reconnect (not just the very first connect)
+        // closes that gap.
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStop(owner: LifecycleOwner) {
                 socket.disconnect()
             }
 
             override fun onStart(owner: LifecycleOwner) {
-                repositoryScope.launch { socket.connect() }
+                repositoryScope.launch {
+                    socket.connect()
+                    lastKnownUserId?.let { resyncFromServer(it) }
+                }
             }
         })
     }
@@ -91,12 +102,36 @@ class ChatRepository(
      * connection carrying events for every chat the user is in.
      */
     fun startChatListSync(currentUserId: String) {
+        lastKnownUserId = currentUserId
         repositoryScope.launch {
             socket.connect()
             startGlobalMirror(currentUserId)
-            runCatching { api.getChats() }
-                .onSuccess { chats -> chats.forEach { chatDao.upsert(ChatEntity.fromModel(it.toModel())) } }
+            resyncFromServer(currentUserId)
         }
+    }
+
+    /**
+     * Full REST resync of every chat's metadata AND messages — not just the
+     * chat list. Anything that arrived while the socket was disconnected
+     * (see the ON_STOP/ON_START observer above) only shows up this way:
+     * live socket events can't retroactively deliver what was missed while
+     * offline. Also backfills deliveredAt for anything that came in that way,
+     * same as the live path in startGlobalMirror does.
+     */
+    private suspend fun resyncFromServer(currentUserId: String) {
+        runCatching { api.getChats() }
+            .onSuccess { chats ->
+                chats.forEach { chatDto ->
+                    chatDao.upsert(ChatEntity.fromModel(chatDto.toModel()))
+                    runCatching { api.getMessages(chatDto.id) }
+                        .onSuccess { messages ->
+                            messageDao.replaceAllForChat(chatDto.id, messages.map { MessageEntity.fromModel(it.toModel()) })
+                            messages
+                                .filter { it.senderId != currentUserId && it.deliveredAt == null }
+                                .forEach { runCatching { socket.markDelivered(chatDto.id, it.id) } }
+                        }
+                }
+            }
     }
 
     private fun startGlobalMirror(currentUserId: String) {
@@ -146,6 +181,9 @@ class ChatRepository(
             runCatching { api.getMessages(chatId) }
                 .onSuccess { messages ->
                     messageDao.replaceAllForChat(chatId, messages.map { MessageEntity.fromModel(it.toModel()) })
+                    messages
+                        .filter { it.senderId != currentUserId && it.deliveredAt == null }
+                        .forEach { runCatching { socket.markDelivered(chatId, it.id) } }
                 }
         }
     }
@@ -166,6 +204,12 @@ class ChatRepository(
     ) {
         val message = socket.sendMessage(chatId, text, replyToMessageId, replyToSenderId, replyToText)
             .getOrElseNetworkError()
+        messageDao.upsert(MessageEntity.fromModel(message.toModel()))
+    }
+
+    /** Empty emoji clears your reaction; the same emoji again also clears it (toggle) — see server/src/socket/index.js. */
+    suspend fun reactToMessage(chatId: String, messageId: String, emoji: String) {
+        val message = socket.react(chatId, messageId, emoji).getOrElseNetworkError()
         messageDao.upsert(MessageEntity.fromModel(message.toModel()))
     }
 

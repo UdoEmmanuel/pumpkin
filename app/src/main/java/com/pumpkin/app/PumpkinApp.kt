@@ -3,6 +3,7 @@ package com.pumpkin.app
 import android.app.Application
 import com.google.firebase.FirebaseApp
 import com.pumpkin.app.data.local.AppDatabase
+import com.pumpkin.app.ui.theme.ThemeStore
 
 class PumpkinApp : Application() {
 
@@ -19,5 +20,6 @@ class PumpkinApp : Application() {
         // against the real message store.
         FirebaseApp.initializeApp(this)
         database = AppDatabase.getInstance(this)
+        ThemeStore.load(this)
     }
 }

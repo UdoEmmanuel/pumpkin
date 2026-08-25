@@ -77,9 +77,14 @@ fun PumpkinNavHost(activity: FragmentActivity) {
 
     NavHost(navController = navController, startDestination = Routes.CALCULATOR) {
         composable(Routes.CALCULATOR) {
-            CalculatorScreen(
-                onSecretSequenceEntered = { navController.navigate(Routes.LOCK) }
-            )
+            // Fixed palette regardless of the user's chosen app theme — the
+            // decoy shouldn't visibly change look based on an in-app
+            // preference only reachable after unlocking past it.
+            androidx.compose.material3.MaterialTheme(colorScheme = com.pumpkin.app.ui.theme.CalculatorColors) {
+                CalculatorScreen(
+                    onSecretSequenceEntered = { navController.navigate(Routes.LOCK) }
+                )
+            }
         }
         composable(Routes.LOCK) {
             LockScreen(

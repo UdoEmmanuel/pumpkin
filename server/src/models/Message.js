@@ -17,7 +17,10 @@ const messageSchema = new mongoose.Schema(
     // the quote needs to keep making sense even after that happens.
     replyToMessageId: { type: String, default: null },
     replyToSenderId: { type: String, default: null },
-    replyToText: { type: String, default: null }
+    replyToText: { type: String, default: null },
+    // uid -> emoji. One reaction per user per message (re-reacting replaces
+    // it, same emoji again clears it) — see socket message:react.
+    reactions: { type: Map, of: String, default: {} }
   },
   { versionKey: false, _id: false }
 );

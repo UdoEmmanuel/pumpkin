@@ -25,18 +25,24 @@ class PumpkinMessagingService : FirebaseMessagingService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onMessageReceived(message: RemoteMessage) {
-        // Data-only payload: {"type": "new_message", "chatId": "..."}. No
-        // RemoteMessage.notification handling on purpose — see class doc.
-        if (message.data["type"] != "new_message") return
+        // Data-only payload: {"type": "new_message"|"reaction", "chatId": "..."}.
+        // No RemoteMessage.notification handling on purpose — see class doc.
+        val type = message.data["type"]
+        if (type != "new_message" && type != "reaction") return
 
-        // Foregrounded: the socket connection already delivered this message
-        // and the open chat screen (or list) already reflects it — playing a
-        // sound on top would be redundant noise, not a useful cue.
         val chatId = message.data["chatId"]
         scope.launch(Dispatchers.Main) {
             val isForeground = ProcessLifecycleOwner.get().lifecycle.currentState
                 .isAtLeast(Lifecycle.State.STARTED)
-            if (isForeground) return@launch
+            // Only suppress the sound when the user is actually looking at
+            // THIS chat right now — being foregrounded on the chat list, the
+            // decoy calculator, or the lock screen is still a case where
+            // nothing on screen shows the new message, so it still needs a
+            // cue. (Previously this suppressed on any foreground state,
+            // which meant no sound ever played while sitting on the chat
+            // list — see CurrentChatTracker kdoc.)
+            val viewingThisChat = isForeground && chatId != null && CurrentChatTracker.openChatId == chatId
+            if (viewingThisChat) return@launch
 
             val toneUri = chatId?.let { NotificationToneStore(applicationContext).get(it) }
             if (toneUri != null) playChosenTone(toneUri) else playBackgroundMessageTone()

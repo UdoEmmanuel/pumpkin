@@ -120,6 +120,14 @@ class PumpkinSocket {
             (response.get("message") as JSONObject).let { gson.fromJson(it.toString(), MessageDto::class.java) }
         }
 
+    suspend fun react(chatId: String, messageId: String, emoji: String): Result<MessageDto> =
+        emitWithAck(
+            "message:react",
+            JSONObject().put("chatId", chatId).put("messageId", messageId).put("emoji", emoji)
+        ) { response ->
+            (response.get("message") as JSONObject).let { gson.fromJson(it.toString(), MessageDto::class.java) }
+        }
+
     suspend fun markRead(chatId: String, messageId: String): Result<Unit> =
         emitWithAck("message:read", JSONObject().put("chatId", chatId).put("messageId", messageId)) {}
 

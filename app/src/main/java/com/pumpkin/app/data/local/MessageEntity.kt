@@ -24,7 +24,8 @@ data class MessageEntity(
     val deletedAt: Long?,
     val replyToMessageId: String? = null,
     val replyToSenderId: String? = null,
-    val replyToText: String? = null
+    val replyToText: String? = null,
+    val reactions: Map<String, String> = emptyMap()
 ) {
     fun toModel() = Message(
         id = id,
@@ -38,7 +39,8 @@ data class MessageEntity(
         deletedAt = deletedAt,
         replyToMessageId = replyToMessageId,
         replyToSenderId = replyToSenderId,
-        replyToText = replyToText
+        replyToText = replyToText,
+        reactions = reactions
     )
 
     companion object {
@@ -54,7 +56,8 @@ data class MessageEntity(
             deletedAt = message.deletedAt,
             replyToMessageId = message.replyToMessageId,
             replyToSenderId = message.replyToSenderId,
-            replyToText = message.replyToText
+            replyToText = message.replyToText,
+            reactions = message.reactions
         )
     }
 }

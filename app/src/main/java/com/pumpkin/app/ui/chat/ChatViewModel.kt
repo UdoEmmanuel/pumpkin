@@ -3,6 +3,7 @@ package com.pumpkin.app.ui.chat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.pumpkin.app.data.model.Message
+import com.pumpkin.app.data.remote.CurrentChatTracker
 import com.pumpkin.app.data.remote.socket.PresenceUpdate
 import com.pumpkin.app.data.repository.ChatRepository
 import kotlinx.coroutines.CancellationException
@@ -98,6 +99,15 @@ class ChatViewModel(
         if (chat != null && otherId != null) chat.nicknames[otherId] else null
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    // The nickname the PARTNER set for ME in this chat — synced the same way
+    // as currentNickname (both live on the shared Chat.nicknames map, see
+    // server/src/models/Chat.js), just keyed by my own uid instead of
+    // theirs. Surfaced in ChatScreen so a nickname set for you is actually
+    // visible on your side, not just the setter's.
+    val myNickname: StateFlow<String?> = chatFlow
+        .map { it?.nicknames?.get(currentUserId) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     private val _nicknameError = MutableStateFlow<String?>(null)
     val nicknameError: StateFlow<String?> = _nicknameError.asStateFlow()
 
@@ -127,6 +137,11 @@ class ChatViewModel(
     }
 
     init {
+        // Tells PumpkinMessagingService "the user is actually looking at
+        // this chat right now" — see CurrentChatTracker kdoc for why plain
+        // app-foreground state isn't specific enough on its own.
+        CurrentChatTracker.openChatId = chatId
+
         repository.startMessageSync(chatId, currentUserId)
 
         viewModelScope.launch {
@@ -180,6 +195,13 @@ class ChatViewModel(
         broadcastTyping(isTyping = false, force = true)
     }
 
+    /** Called from a message bubble's reaction picker. Same emoji tapped again clears it. */
+    fun onReact(messageId: String, emoji: String) {
+        viewModelScope.launch {
+            runCatching { repository.reactToMessage(chatId, messageId, emoji) }
+        }
+    }
+
     /** Called on every keystroke in the input field — typing broadcasts are throttled, draft saves are not (cheap local writes). */
     fun onInputChanged(text: String) {
         _input.value = text
@@ -227,6 +249,7 @@ class ChatViewModel(
 
     override fun onCleared() {
         repository.setTypingAsync(chatId, currentUserId, isTyping = false)
+        if (CurrentChatTracker.openChatId == chatId) CurrentChatTracker.openChatId = null
         super.onCleared()
     }
 }

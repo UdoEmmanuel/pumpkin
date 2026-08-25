@@ -3,7 +3,9 @@ package com.pumpkin.app.ui.chatlist
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.pumpkin.app.data.local.UpdateDismissStore
 import com.pumpkin.app.data.model.Chat
+import com.pumpkin.app.data.remote.api.dto.AppVersionDto
 import com.pumpkin.app.data.repository.ChatRepository
 import com.pumpkin.app.data.repository.UpdateRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -114,6 +116,7 @@ class ChatListViewModel(
 
     fun downloadAndInstallUpdate(context: Context) {
         _updateState.value = UpdateState.Downloading
+        _bannerUpdate.value = null
         viewModelScope.launch {
             updateRepository.downloadAndInstall(context)
                 .onSuccess { _updateState.value = UpdateState.Idle }
@@ -123,5 +126,28 @@ class ChatListViewModel(
 
     fun dismissUpdateDialog() {
         _updateState.value = UpdateState.Idle
+    }
+
+    // Separate from updateState/checkForUpdate above (which drives the
+    // modal "Update app" menu flow) — this is a silent, no-dialog check for
+    // the chat list's dismissible banner, run once automatically rather
+    // than only on demand.
+    private val _bannerUpdate = MutableStateFlow<AppVersionDto?>(null)
+    val bannerUpdate: StateFlow<AppVersionDto?> = _bannerUpdate.asStateFlow()
+
+    fun checkForUpdateBanner(context: Context) {
+        viewModelScope.launch {
+            updateRepository.checkForUpdate().onSuccess { info ->
+                val alreadyDismissed = UpdateDismissStore(context).isDismissed(info.version)
+                if (info.hasApk && updateRepository.isDifferentFromInstalled(info.version) && !alreadyDismissed) {
+                    _bannerUpdate.value = info
+                }
+            }
+        }
+    }
+
+    fun dismissUpdateBanner(context: Context) {
+        _bannerUpdate.value?.let { UpdateDismissStore(context).dismiss(it.version) }
+        _bannerUpdate.value = null
     }
 }

@@ -7,7 +7,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,11 +22,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
@@ -95,11 +100,14 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
     val input by viewModel.input.collectAsState()
     val currentUserId = viewModel.currentUserId
     val currentNickname by viewModel.currentNickname.collectAsState()
+    val myNickname by viewModel.myNickname.collectAsState()
     val replyingTo by viewModel.replyingTo.collectAsState()
     val nicknameError by viewModel.nicknameError.collectAsState()
     var showHeaderMenu by remember { mutableStateOf(false) }
     var showNicknameDialog by remember { mutableStateOf(false) }
     var nicknameInput by remember { mutableStateOf("") }
+    var reactingToMessage by remember { mutableStateOf<Message?>(null) }
+    var showFullEmojiPicker by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val toneStore = remember { NotificationToneStore(context) }
@@ -270,6 +278,14 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
         }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            myNickname?.let {
+                Text(
+                    text = stringResource(R.string.chat_my_nickname_banner, it),
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
+                )
+            }
             val listState = rememberLazyListState()
             val coroutineScope = rememberCoroutineScope()
             fun scrollToBottom() {
@@ -291,7 +307,8 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                         currentUserId = currentUserId,
                         otherParticipantId = otherParticipantId,
                         otherParticipantName = otherParticipantName,
-                        onReply = { viewModel.startReply(message) }
+                        onReply = { viewModel.startReply(message) },
+                        onLongPress = { reactingToMessage = message }
                     )
                 }
             }
@@ -407,6 +424,88 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
             }
         )
     }
+
+    reactingToMessage?.let { target ->
+        AlertDialog(
+            onDismissRequest = { reactingToMessage = null },
+            title = null,
+            text = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    QUICK_REACTIONS.forEach { emoji ->
+                        Text(
+                            text = emoji,
+                            fontSize = 28.sp,
+                            modifier = Modifier
+                                .clickable {
+                                    viewModel.onReact(target.id, emoji)
+                                    reactingToMessage = null
+                                }
+                                .padding(6.dp)
+                        )
+                    }
+                    Icon(
+                        Icons.Filled.Add,
+                        contentDescription = stringResource(R.string.chat_reaction_more),
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clickable {
+                                reactingToMessage = target
+                                showFullEmojiPicker = true
+                            }
+                    )
+                }
+            },
+            confirmButton = {}
+        )
+    }
+
+    if (showFullEmojiPicker) {
+        val target = reactingToMessage
+        AlertDialog(
+            onDismissRequest = {
+                showFullEmojiPicker = false
+                reactingToMessage = null
+            },
+            title = { Text(stringResource(R.string.chat_reaction_more)) },
+            text = {
+                LazyVerticalGridEmojiPicker(emojis = FULL_EMOJI_SET) { emoji ->
+                    if (target != null) viewModel.onReact(target.id, emoji)
+                    showFullEmojiPicker = false
+                    reactingToMessage = null
+                }
+            },
+            confirmButton = {}
+        )
+    }
+}
+
+private val QUICK_REACTIONS = listOf("👍", "❤️", "😂", "😮", "😢", "🙏")
+
+private val FULL_EMOJI_SET = listOf(
+    "👍", "👎", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉", "😍",
+    "😘", "😊", "😉", "😢", "😡", "🤔", "😴", "🤗", "👏", "🙌",
+    "💯", "✅", "❌", "⭐", "💔", "😱", "🥳", "🤝", "👀", "💀"
+)
+
+@Composable
+private fun LazyVerticalGridEmojiPicker(emojis: List<String>, onPick: (String) -> Unit) {
+    androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+        columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(6),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        gridItems(emojis) { emoji ->
+            Text(
+                text = emoji,
+                fontSize = 24.sp,
+                modifier = Modifier
+                    .clickable { onPick(emoji) }
+                    .padding(8.dp)
+            )
+        }
+    }
 }
 
 @Composable
@@ -415,7 +514,8 @@ private fun MessageRow(
     currentUserId: String,
     otherParticipantId: String?,
     otherParticipantName: String?,
-    onReply: () -> Unit
+    onReply: () -> Unit,
+    onLongPress: () -> Unit
 ) {
     val isOwnMessage = message.senderId == currentUserId
     val offsetX = remember { Animatable(0f) }
@@ -449,51 +549,79 @@ private fun MessageRow(
                     }
                 )
             }
+            // Separate pointerInput for long-press-to-react — the drag
+            // detector above consumes move events once a horizontal drag is
+            // recognized, which is what keeps a swipe-to-reply gesture from
+            // also triggering this long-press (no significant movement means
+            // this fires instead).
+            .pointerInput(message.id) {
+                detectTapGestures(onLongPress = { onLongPress() })
+            }
     ) {
-        Box(
-            modifier = Modifier
-                .background(
-                    if (isOwnMessage) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.surfaceVariant,
-                    RoundedCornerShape(16.dp)
-                )
-                .padding(horizontal = 14.dp, vertical = 10.dp)
-        ) {
-            Column {
-                if (message.replyToText != null) {
-                    val replySenderLabel = if (message.replyToSenderId == currentUserId) {
-                        stringResource(R.string.chat_reply_to_self)
-                    } else {
-                        otherParticipantName ?: ""
-                    }
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(
-                                (if (isOwnMessage) Color.White else MaterialTheme.colorScheme.onSurfaceVariant)
-                                    .copy(alpha = 0.15f),
-                                RoundedCornerShape(6.dp)
+        Box {
+            Box(
+                modifier = Modifier
+                    .background(
+                        if (isOwnMessage) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.surfaceVariant,
+                        RoundedCornerShape(16.dp)
+                    )
+                    .padding(horizontal = 14.dp, vertical = 10.dp)
+            ) {
+                Column {
+                    if (message.replyToText != null) {
+                        val replySenderLabel = if (message.replyToSenderId == currentUserId) {
+                            stringResource(R.string.chat_reply_to_self)
+                        } else {
+                            otherParticipantName ?: ""
+                        }
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    (if (isOwnMessage) Color.White else MaterialTheme.colorScheme.onSurfaceVariant)
+                                        .copy(alpha = 0.15f),
+                                    RoundedCornerShape(6.dp)
+                                )
+                                .padding(6.dp)
+                        ) {
+                            Text(
+                                text = replySenderLabel,
+                                fontSize = 11.sp,
+                                color = if (isOwnMessage) Color.White else MaterialTheme.colorScheme.primary
                             )
-                            .padding(6.dp)
-                    ) {
+                            Text(
+                                text = message.replyToText,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = if (isOwnMessage) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Text(
+                        text = message.text,
+                        color = if (isOwnMessage) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            if (message.reactions.isNotEmpty()) {
+                val grouped = message.reactions.values.groupingBy { it }.eachCount()
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .offset(x = 4.dp, y = 10.dp)
+                        .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(10.dp))
+                        .padding(horizontal = 5.dp, vertical = 2.dp)
+                ) {
+                    grouped.forEach { (emoji, count) ->
                         Text(
-                            text = replySenderLabel,
-                            fontSize = 11.sp,
-                            color = if (isOwnMessage) Color.White else MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = message.replyToText,
-                            fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            color = if (isOwnMessage) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                            text = if (count > 1) "$emoji $count" else emoji,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(horizontal = 1.dp)
                         )
                     }
                 }
-                Text(
-                    text = message.text,
-                    color = if (isOwnMessage) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
         }
         Row(

@@ -72,6 +72,9 @@
     <string name="chatlist_update_downloading">Downloading update…</string>
     <string name="chatlist_update_error">Couldn\'t check for updates</string>
     <string name="chatlist_update_ok">OK</string>
+    <string name="chatlist_app_theme_action">App theme</string>
+    <string name="chatlist_update_banner_text">%1$s is available</string>
+    <string name="chatlist_update_banner_dismiss">Dismiss</string>
 
     <string name="chat_input_hint">Message</string>
     <string name="chat_send">Send</string>
@@ -94,4 +97,6 @@
     <string name="chat_nickname_save">Save</string>
     <string name="chat_reply_to_self">You</string>
     <string name="chat_reply_cancel">Cancel reply</string>
+    <string name="chat_my_nickname_banner">Called \"%1$s\" here</string>
+    <string name="chat_reaction_more">More reactions</string>
 </resources>

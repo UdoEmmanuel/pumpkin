@@ -20,7 +20,9 @@ data class Message(
     // auto-deletes later (PRD 4.4).
     val replyToMessageId: String? = null,
     val replyToSenderId: String? = null,
-    val replyToText: String? = null
+    val replyToText: String? = null,
+    // uid -> emoji, one reaction per user per message.
+    val reactions: Map<String, String> = emptyMap()
 ) {
     fun statusFor(otherParticipantId: String): MessageStatus = when {
         readAt.containsKey(otherParticipantId) -> MessageStatus.READ
