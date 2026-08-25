@@ -11,6 +11,21 @@ function chatMessageRoom(chatId) {
   return `chat:${chatId}`;
 }
 
+// Shared by message:send and message:react — always sent regardless of the
+// recipient's live socket status (a foregrounded recipient's client just
+// gets a harmless duplicate signal alongside the socket event it already
+// received). Fire-and-forget: never let a push failure affect the calling
+// handler's already-sent response.
+async function pushToOtherParticipant(chatId, actingUserId, type) {
+  const chat = await Chat.findById(chatId);
+  const recipientId = chat?.participantIds.find((id) => id !== actingUserId);
+  if (!recipientId) return;
+  const recipient = await User.findById(recipientId);
+  if (recipient?.fcmToken) {
+    sendDataMessage(recipient.fcmToken, { type, chatId });
+  }
+}
+
 function attachSocketHandlers(io) {
   io.use(async (socket, next) => {
     try {
@@ -77,22 +92,31 @@ function attachSocketHandlers(io) {
         io.to(chatMessageRoom(chatId)).emit("message:new", toMessageJson(message));
         ack?.({ ok: true, message: toMessageJson(message) });
 
-        // Silent background ping (PRD 4.3) — always sent regardless of the
-        // recipient's live socket status; a foregrounded recipient's client
-        // just gets a harmless duplicate signal alongside the socket event
-        // it already received. Fire-and-forget: never let a push failure
-        // affect the message-send response above, which is already sent.
-        const chat = await Chat.findById(chatId);
-        const recipientId = chat?.participantIds.find((id) => id !== socket.userId);
-        if (recipientId) {
-          const recipient = await User.findById(recipientId);
-          if (recipient?.fcmToken) {
-            sendDataMessage(recipient.fcmToken, {
-              type: "new_message",
-              chatId
-            });
-          }
+        pushToOtherParticipant(chatId, socket.userId, "new_message");
+      } catch (e) {
+        ack?.({ ok: false, error: e.message });
+      }
+    });
+
+    // Tap an emoji on a message bubble. One reaction per user per message —
+    // the same emoji again clears it, a different one replaces it.
+    socket.on("message:react", async ({ chatId, messageId, emoji }, ack) => {
+      try {
+        const existing = await Message.findById(messageId);
+        if (!existing) return ack?.({ ok: false, error: "Message not found" });
+
+        const current = existing.reactions.get(socket.userId);
+        if (emoji && current !== emoji) {
+          existing.reactions.set(socket.userId, emoji);
+        } else {
+          existing.reactions.delete(socket.userId);
         }
+        await existing.save();
+
+        io.to(chatMessageRoom(chatId)).emit("message:updated", toMessageJson(existing));
+        ack?.({ ok: true, message: toMessageJson(existing) });
+
+        pushToOtherParticipant(chatId, socket.userId, "reaction");
       } catch (e) {
         ack?.({ ok: false, error: e.message });
       }

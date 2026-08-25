@@ -1,6 +1,8 @@
 package com.pumpkin.app.ui.chatlist
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,11 +10,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -31,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,7 +50,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pumpkin.app.R
+import com.pumpkin.app.ui.theme.AppColorTheme
 import com.pumpkin.app.ui.theme.Avatar
+import com.pumpkin.app.ui.theme.ThemeStore
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -59,11 +67,14 @@ fun ChatListScreen(
     val newChatError by viewModel.newChatError.collectAsState()
     val deleteError by viewModel.deleteError.collectAsState()
     val updateState by viewModel.updateState.collectAsState()
+    val bannerUpdate by viewModel.bannerUpdate.collectAsState()
     val context = LocalContext.current
+    LaunchedEffect(Unit) { viewModel.checkForUpdateBanner(context) }
     var showNewChatDialog by remember { mutableStateOf(false) }
     var partnerEmail by remember { mutableStateOf("") }
     var chatPendingDelete by remember { mutableStateOf<ChatListItem?>(null) }
     var showOverflowMenu by remember { mutableStateOf(false) }
+    var showThemeDialog by remember { mutableStateOf(false) }
     val unknownPartnerLabel = stringResource(R.string.chatlist_unknown_partner)
 
     Scaffold(
@@ -103,6 +114,13 @@ fun ChatListScreen(
                                 viewModel.checkForUpdate()
                             }
                         )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.chatlist_app_theme_action)) },
+                            onClick = {
+                                showOverflowMenu = false
+                                showThemeDialog = true
+                            }
+                        )
                     }
                 }
             )
@@ -118,6 +136,31 @@ fun ChatListScreen(
         }
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+        bannerUpdate?.let { info ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.chatlist_update_banner_text, info.version),
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(onClick = { viewModel.downloadAndInstallUpdate(context) }) {
+                    Text(stringResource(R.string.chatlist_update_action))
+                }
+                IconButton(onClick = { viewModel.dismissUpdateBanner(context) }) {
+                    Icon(
+                        Icons.Filled.Close,
+                        contentDescription = stringResource(R.string.chatlist_update_banner_dismiss),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+        }
         deleteError?.let {
             Text(
                 text = it,
@@ -316,6 +359,48 @@ fun ChatListScreen(
             text = { Text(state.message) },
             confirmButton = {
                 TextButton(onClick = { viewModel.dismissUpdateDialog() }) {
+                    Text(stringResource(R.string.chatlist_update_ok))
+                }
+            }
+        )
+    }
+
+    if (showThemeDialog) {
+        val selected = ThemeStore.selected.value
+        AlertDialog(
+            onDismissRequest = { showThemeDialog = false },
+            title = { Text(stringResource(R.string.chatlist_app_theme_action)) },
+            text = {
+                Column {
+                    AppColorTheme.entries.forEach { theme ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    ThemeStore.select(context, theme)
+                                    showThemeDialog = false
+                                }
+                                .padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .background(theme.accent, androidx.compose.foundation.shape.CircleShape)
+                            )
+                            Text(
+                                text = theme.displayName,
+                                modifier = Modifier.padding(start = 12.dp).weight(1f)
+                            )
+                            if (theme == selected) {
+                                Icon(Icons.Filled.Check, contentDescription = null, tint = theme.accent)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showThemeDialog = false }) {
                     Text(stringResource(R.string.chatlist_update_ok))
                 }
             }

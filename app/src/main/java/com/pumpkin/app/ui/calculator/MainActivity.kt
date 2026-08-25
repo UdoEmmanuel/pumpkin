@@ -5,6 +5,7 @@ import androidx.activity.compose.setContent
 import androidx.fragment.app.FragmentActivity
 import com.pumpkin.app.ui.navigation.PumpkinNavHost
 import com.pumpkin.app.ui.theme.PumpkinTheme
+import com.pumpkin.app.ui.theme.ThemeStore
 
 // FragmentActivity (not plain ComponentActivity) because BiometricPrompt,
 // used from the lock screen further down the nav graph, requires one.
@@ -14,7 +15,7 @@ class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            PumpkinTheme {
+            PumpkinTheme(colorTheme = ThemeStore.selected.value) {
                 PumpkinNavHost(activity = this)
             }
         }

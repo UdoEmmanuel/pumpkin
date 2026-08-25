@@ -31,8 +31,8 @@ android {
         // Bump both on every release — the in-app updater (ChatListScreen's
         // "Update app") compares versionName against the latest GitHub tag
         // to decide whether an update is available.
-        versionCode = 6
-        versionName = "0.5.0"
+        versionCode = 7
+        versionName = "0.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

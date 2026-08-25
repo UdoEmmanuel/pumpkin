@@ -155,7 +155,8 @@ function toMessageJson(message) {
     exitedAtAfterRead: Object.fromEntries(message.exitedAtAfterRead || new Map()),
     replyToMessageId: message.replyToMessageId || null,
     replyToSenderId: message.replyToSenderId || null,
-    replyToText: message.replyToText || null
+    replyToText: message.replyToText || null,
+    reactions: Object.fromEntries(message.reactions || new Map())
   };
 }
 
