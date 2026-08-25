@@ -1,0 +1,81 @@
+name: Build and release APK
+
+# Fires on every push to main that touches the Android app, plus a manual
+# button (Actions tab -> this workflow -> Run workflow) for an on-demand
+# release without needing a throwaway commit.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+  workflow_dispatch: {}
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Next version = latest "vX.Y.Z" release tag, patch bumped by one.
+      # This is computed for this build only — never committed back to
+      # build.gradle.kts, so there's no risk of the version bump itself
+      # triggering another run (an infinite loop).
+      - name: Determine next version
+        id: version
+        run: |
+          latest_tag=$(git tag --list 'v*' --sort=-v:refname | head -n1)
+          latest_tag=${latest_tag#v}
+          if [ -z "$latest_tag" ]; then latest_tag="0.0.0"; fi
+          IFS='.' read -r major minor patch <<< "$latest_tag"
+          new_version="$major.$minor.$((patch + 1))"
+          echo "version=$new_version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$new_version" >> "$GITHUB_OUTPUT"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      # Same signing key every release keeps the in-app "Update app" install
+      # path working (Android refuses to install an update signed with a
+      # different key than what's already on the device) — see keystore.properties.example.
+      - name: Restore signing keystore
+        run: echo "${{ secrets.PUMPKIN_KEYSTORE_BASE64 }}" | base64 -d > pumpkin-release.jks
+
+      - name: Write keystore.properties
+        run: |
+          cat > keystore.properties <<EOF
+          storeFile=../pumpkin-release.jks
+          storePassword=${{ secrets.PUMPKIN_STORE_PASSWORD }}
+          keyAlias=pumpkin
+          keyPassword=${{ secrets.PUMPKIN_KEY_PASSWORD }}
+          EOF
+
+      # Overwrites the checked-in versionCode/versionName for this build
+      # only (working tree, not committed) — see "Determine next version".
+      - name: Apply computed version
+        run: |
+          run_number="${{ github.run_number }}"
+          sed -i "s/versionCode = .*/versionCode = $run_number/" app/build.gradle.kts
+          sed -i "s/versionName = \".*\"/versionName = \"${{ steps.version.outputs.version }}\"/" app/build.gradle.kts
+
+      - name: Build signed release APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
+          files: app/build/outputs/apk/release/app-release.apk
