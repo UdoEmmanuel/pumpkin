@@ -50,6 +50,32 @@ diagRouter.get(
   })
 );
 
+// Identical to the real /download route below, just unauthenticated — lets
+// me test the actual streaming path (as opposed to /download-diag's
+// buffered read) directly against the live server. TEMPORARY.
+diagRouter.get("/download-diag-stream", asyncHandler(async (_req, res) => {
+  const release = await fetchLatestRelease();
+  const asset = apkAssetOf(release);
+  if (!asset) return res.status(404).json({ error: "no asset" });
+
+  const assetRes = await fetch(asset.url, { headers: githubHeaders("application/octet-stream") });
+  if (!assetRes.ok || !assetRes.body) return res.status(502).json({ error: "fetch failed" });
+
+  res.setHeader("Content-Type", "application/vnd.android.package-archive");
+  res.setHeader("Content-Disposition", `attachment; filename="${asset.name}"`);
+  const actualLength = assetRes.headers.get("content-length");
+  if (actualLength) res.setHeader("Content-Length", actualLength);
+
+  const { Readable } = require("stream");
+  const { pipeline } = require("stream/promises");
+  try {
+    await pipeline(Readable.fromWeb(assetRes.body), res);
+  } catch (e) {
+    console.error("[download-diag-stream] failed:", e.message);
+    if (!res.headersSent) res.status(502).json({ error: "stream failed: " + e.message });
+  }
+}));
+
 router.use(requireAuth);
 
 function githubHeaders(accept) {
