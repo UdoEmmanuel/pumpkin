@@ -23,8 +23,16 @@ data class Message(
     val replyToText: String? = null,
     // uid -> emoji, one reaction per user per message.
     val reactions: Map<String, String> = emptyMap(),
-    val editedAt: Long? = null
+    val editedAt: Long? = null,
+    // Voice notes — stored inline as base64 on the message itself (see
+    // server/src/models/Message.js) rather than in external object storage,
+    // so a deleted message takes its audio with it automatically.
+    val type: String = "text",
+    val audioData: String? = null,
+    val audioDurationMs: Long? = null
 ) {
+    val isVoiceNote: Boolean get() = type == "voice"
+
     fun statusFor(otherParticipantId: String): MessageStatus = when {
         readAt.containsKey(otherParticipantId) -> MessageStatus.READ
         deliveredAt != null -> MessageStatus.DELIVERED

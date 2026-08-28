@@ -1,7 +1,9 @@
 package com.pumpkin.app.ui.chat
 
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.RingtoneManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -33,7 +35,10 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -78,12 +83,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import androidx.core.content.ContextCompat
 import com.pumpkin.app.R
 import com.pumpkin.app.data.local.NotificationToneStore
+import com.pumpkin.app.data.local.VoiceRecorder
 import com.pumpkin.app.data.model.Message
 import com.pumpkin.app.data.model.MessageStatus
 import com.pumpkin.app.ui.theme.Avatar
 import com.pumpkin.app.ui.theme.ReadReceiptBlue
+import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -117,6 +125,50 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
         if (result.resultCode != Activity.RESULT_OK) return@rememberLauncherForActivityResult
         val uri = result.data?.getParcelableExtra<android.net.Uri>(RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
         toneStore.set(viewModel.chatId, uri?.toString())
+    }
+
+    val voiceRecorder = remember { VoiceRecorder(context) }
+    var isRecording by remember { mutableStateOf(false) }
+    var recordingSeconds by remember { mutableStateOf(0) }
+    var hasRecordPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+    val recordPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        hasRecordPermission = granted
+    }
+
+    fun finishRecording(send: Boolean) {
+        isRecording = false
+        val result = voiceRecorder.stop()
+        if (!send || result == null) {
+            result?.first?.delete()
+            return
+        }
+        val (file, durationMs) = result
+        // Anything under ~600ms is almost certainly an accidental tap, not
+        // an intended note — discard rather than send a near-silent blip.
+        if (durationMs < 600) {
+            file.delete()
+            return
+        }
+        val base64 = file.readBytes().let { android.util.Base64.encodeToString(it, android.util.Base64.NO_WRAP) }
+        file.delete()
+        viewModel.sendVoiceNote(base64, durationMs)
+    }
+
+    LaunchedEffect(isRecording) {
+        if (isRecording) {
+            recordingSeconds = 0
+            while (isRecording) {
+                delay(1000)
+                recordingSeconds++
+                if (recordingSeconds * 1000L >= VoiceRecorder.MAX_DURATION_MS) {
+                    finishRecording(send = true)
+                }
+            }
+        }
     }
 
     // PRD 4.4: mark every unread-by-me message as read as soon as it's
@@ -368,37 +420,91 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = {
-                        viewModel.onInputChanged(it)
-                    },
-                    placeholder = { Text(stringResource(R.string.chat_input_hint)) },
-                    shape = RoundedCornerShape(24.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
-                    ),
-                    // Tapping the field is what opens the keyboard, so this is
-                    // the actual moment it's about to cover part of the
-                    // screen — jump to the latest message right then instead
-                    // of making the user scroll down manually to see it.
-                    modifier = Modifier.weight(1f).onFocusChanged { if (it.isFocused) scrollToBottom() }
-                )
+                if (isRecording) {
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(24.dp))
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .background(MaterialTheme.colorScheme.error, CircleShape)
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.chat_recording_duration,
+                                recordingSeconds / 60, recordingSeconds % 60
+                            ),
+                            modifier = Modifier.padding(start = 10.dp)
+                        )
+                    }
+                } else {
+                    OutlinedTextField(
+                        value = input,
+                        onValueChange = {
+                            viewModel.onInputChanged(it)
+                        },
+                        placeholder = { Text(stringResource(R.string.chat_input_hint)) },
+                        shape = RoundedCornerShape(24.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                        ),
+                        // Tapping the field is what opens the keyboard, so this is
+                        // the actual moment it's about to cover part of the
+                        // screen — jump to the latest message right then instead
+                        // of making the user scroll down manually to see it.
+                        modifier = Modifier.weight(1f).onFocusChanged { if (it.isFocused) scrollToBottom() }
+                    )
+                }
                 Box(
                     modifier = Modifier
                         .padding(start = 8.dp)
                         .size(48.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary),
+                        .background(if (isRecording) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary),
                     contentAlignment = Alignment.Center
                 ) {
-                    IconButton(onClick = { viewModel.onSendClicked(input) }) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.Send,
-                            contentDescription = stringResource(R.string.chat_send),
-                            tint = Color.White
-                        )
+                    if (input.isBlank() && editingMessage == null) {
+                        // Press-and-hold to record, release to send — mic
+                        // only shown while there's no typed text, matching
+                        // the usual mic<->send swap other chat apps use.
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .pointerInput(Unit) {
+                                    detectTapGestures(
+                                        onPress = {
+                                            if (!hasRecordPermission) {
+                                                recordPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                                return@detectTapGestures
+                                            }
+                                            voiceRecorder.start()
+                                            isRecording = true
+                                            val released = tryAwaitRelease()
+                                            finishRecording(send = released)
+                                        }
+                                    )
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Filled.Mic,
+                                contentDescription = stringResource(R.string.chat_record_voice_note),
+                                tint = Color.White
+                            )
+                        }
+                    } else {
+                        IconButton(onClick = { viewModel.onSendClicked(input) }) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Send,
+                                contentDescription = stringResource(R.string.chat_send),
+                                tint = Color.White
+                            )
+                        }
                     }
                 }
             }
@@ -640,10 +746,14 @@ private fun MessageRow(
                             )
                         }
                     }
-                    Text(
-                        text = message.text,
-                        color = if (isOwnMessage) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    if (message.isVoiceNote) {
+                        VoiceNoteBubble(message = message, isOwnMessage = isOwnMessage)
+                    } else {
+                        Text(
+                            text = message.text,
+                            color = if (isOwnMessage) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
             if (message.reactions.isNotEmpty()) {
@@ -690,6 +800,73 @@ private fun MessageRow(
                 StatusTicks(status = message.statusFor(otherParticipantId))
             }
         }
+    }
+}
+
+@Composable
+private fun VoiceNoteBubble(message: Message, isOwnMessage: Boolean) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    var isPlaying by remember(message.id) { mutableStateOf(false) }
+    var positionMs by remember(message.id) { mutableStateOf(0) }
+    val playerRef = remember(message.id) { mutableStateOf<android.media.MediaPlayer?>(null) }
+    val durationMs = (message.audioDurationMs ?: 0L).toInt()
+
+    DisposableEffect(message.id) {
+        onDispose {
+            playerRef.value?.release()
+            playerRef.value = null
+        }
+    }
+
+    val tint = if (isOwnMessage) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = {
+            val current = playerRef.value
+            if (isPlaying) {
+                current?.pause()
+                isPlaying = false
+                return@IconButton
+            }
+            val player = current ?: run {
+                val audioData = message.audioData ?: return@IconButton
+                val bytes = android.util.Base64.decode(audioData, android.util.Base64.NO_WRAP)
+                val dir = java.io.File(context.cacheDir, "voice_in").apply { mkdirs() }
+                val file = java.io.File(dir, "${message.id}.m4a")
+                if (!file.exists()) file.writeBytes(bytes)
+                android.media.MediaPlayer().apply {
+                    setDataSource(file.absolutePath)
+                    prepare()
+                    setOnCompletionListener {
+                        isPlaying = false
+                        positionMs = 0
+                    }
+                }.also { playerRef.value = it }
+            }
+            if (positionMs > 0) player.seekTo(positionMs)
+            player.start()
+            isPlaying = true
+            coroutineScope.launch {
+                while (isPlaying) {
+                    positionMs = playerRef.value?.currentPosition ?: 0
+                    delay(200)
+                }
+            }
+        }) {
+            Icon(
+                if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                contentDescription = stringResource(
+                    if (isPlaying) R.string.chat_voice_note_pause else R.string.chat_voice_note_play
+                ),
+                tint = tint
+            )
+        }
+        val displaySeconds = (if (isPlaying || positionMs > 0) positionMs else durationMs) / 1000
+        Text(
+            text = stringResource(R.string.chat_recording_duration, displaySeconds / 60, displaySeconds % 60),
+            color = tint
+        )
     }
 }
 

@@ -11,6 +11,8 @@
          "install unknown apps" for Pumpkin once, the same as sideloading any
          APK manually — this permission only lets the app START that flow. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Voice notes: press-and-hold record in the chat input row. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
         android:name=".PumpkinApp"

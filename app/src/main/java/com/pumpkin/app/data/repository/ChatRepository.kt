@@ -200,10 +200,14 @@ class ChatRepository(
         text: String,
         replyToMessageId: String? = null,
         replyToSenderId: String? = null,
-        replyToText: String? = null
+        replyToText: String? = null,
+        type: String = "text",
+        audioData: String? = null,
+        audioDurationMs: Long? = null
     ) {
-        val message = socket.sendMessage(chatId, text, replyToMessageId, replyToSenderId, replyToText)
-            .getOrElseNetworkError()
+        val message = socket.sendMessage(
+            chatId, text, replyToMessageId, replyToSenderId, replyToText, type, audioData, audioDurationMs
+        ).getOrElseNetworkError()
         messageDao.upsert(MessageEntity.fromModel(message.toModel()))
     }
 

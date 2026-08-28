@@ -26,7 +26,10 @@ data class MessageEntity(
     val replyToSenderId: String? = null,
     val replyToText: String? = null,
     val reactions: Map<String, String> = emptyMap(),
-    val editedAt: Long? = null
+    val editedAt: Long? = null,
+    val type: String = "text",
+    val audioData: String? = null,
+    val audioDurationMs: Long? = null
 ) {
     fun toModel() = Message(
         id = id,
@@ -42,7 +45,10 @@ data class MessageEntity(
         replyToSenderId = replyToSenderId,
         replyToText = replyToText,
         reactions = reactions,
-        editedAt = editedAt
+        editedAt = editedAt,
+        type = type,
+        audioData = audioData,
+        audioDurationMs = audioDurationMs
     )
 
     companion object {
@@ -60,7 +66,10 @@ data class MessageEntity(
             replyToSenderId = message.replyToSenderId,
             replyToText = message.replyToText,
             reactions = message.reactions,
-            editedAt = message.editedAt
+            editedAt = message.editedAt,
+            type = message.type,
+            audioData = message.audioData,
+            audioDurationMs = message.audioDurationMs
         )
     }
 }

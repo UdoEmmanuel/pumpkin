@@ -76,18 +76,33 @@ function attachSocketHandlers(io) {
 
     socket.on("chat:join", (chatId) => socket.join(chatMessageRoom(chatId)));
 
-    socket.on("message:send", async ({ chatId, text, replyToMessageId, replyToSenderId, replyToText }, ack) => {
+    socket.on(
+      "message:send",
+      async (
+        { chatId, text, replyToMessageId, replyToSenderId, replyToText, type, audioData, audioDurationMs },
+        ack
+      ) => {
       console.log(`[send] chat=${chatId} from=${socket.userId} text=${JSON.stringify(text)}`);
       try {
+        // Comfortably under MongoDB's 16MB document limit, leaving plenty
+        // of room for everything else on the doc — this caps a base64
+        // payload around ~9MB of raw audio, well past what the client's
+        // own recording-length cap would ever produce.
+        if (audioData && audioData.length > 12_000_000) {
+          return ack?.({ ok: false, error: "Voice note too long" });
+        }
         const message = await Message.create({
           _id: randomUUID(),
           chatId,
           senderId: socket.userId,
-          text,
+          text: text || "",
           sentAt: Date.now(),
           replyToMessageId: replyToMessageId || null,
           replyToSenderId: replyToSenderId || null,
-          replyToText: replyToText || null
+          replyToText: replyToText || null,
+          type: type === "voice" ? "voice" : "text",
+          audioData: audioData || null,
+          audioDurationMs: audioDurationMs || null
         });
         io.to(chatMessageRoom(chatId)).emit("message:new", toMessageJson(message));
         ack?.({ ok: true, message: toMessageJson(message) });

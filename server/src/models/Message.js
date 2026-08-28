@@ -25,7 +25,16 @@ const messageSchema = new mongoose.Schema(
     // what the client uses to show an "edited" label. Only ever settable by
     // the original sender, and only while the message still exists (there's
     // nothing else to check: a deleted message can't be found to edit).
-    editedAt: { type: Number, default: null }
+    editedAt: { type: Number, default: null },
+    // Voice notes, stored inline (base64) on the message document itself —
+    // no separate object storage, deliberately: clips are short (client
+    // caps recording length) and this way a deleted/auto-deleted message
+    // takes its audio with it automatically, for free, via the exact same
+    // Message.deleteOne/deleteMany calls that already handle text messages.
+    // No second delete path to keep in sync, no external storage bill.
+    type: { type: String, enum: ["text", "voice"], default: "text" },
+    audioData: { type: String, default: null },
+    audioDurationMs: { type: Number, default: null }
   },
   { versionKey: false, _id: false }
 );
