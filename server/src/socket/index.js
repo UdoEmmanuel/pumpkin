@@ -98,6 +98,30 @@ function attachSocketHandlers(io) {
       }
     });
 
+    // Only the original sender can edit, and only while the message still
+    // exists — an auto-deleted (or otherwise gone) message just isn't found,
+    // which is the entire "not deleted" precondition the client asked for.
+    socket.on("message:edit", async ({ chatId, messageId, text }, ack) => {
+      try {
+        const existing = await Message.findById(messageId);
+        if (!existing) return ack?.({ ok: false, error: "Message not found" });
+        if (existing.senderId !== socket.userId) {
+          return ack?.({ ok: false, error: "Can't edit someone else's message" });
+        }
+        const trimmed = (text || "").trim();
+        if (!trimmed) return ack?.({ ok: false, error: "Message can't be empty" });
+
+        existing.text = trimmed;
+        existing.editedAt = Date.now();
+        await existing.save();
+
+        io.to(chatMessageRoom(chatId)).emit("message:updated", toMessageJson(existing));
+        ack?.({ ok: true, message: toMessageJson(existing) });
+      } catch (e) {
+        ack?.({ ok: false, error: e.message });
+      }
+    });
+
     // Tap an emoji on a message bubble. One reaction per user per message —
     // the same emoji again clears it, a different one replaces it.
     socket.on("message:react", async ({ chatId, messageId, emoji }, ack) => {
