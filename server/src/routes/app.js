@@ -3,13 +3,54 @@ const { requireAuth } = require("../middleware/auth");
 const { asyncHandler } = require("../asyncHandler");
 
 const router = express.Router();
-router.use(requireAuth);
+// Unauthenticated diagnostic router — TEMPORARY, for debugging the
+// update-download corruption issue directly (no Firebase token needed).
+// Remove once resolved. Reveals only byte counts / a hex prefix of an
+// asset the account already owns, not the token or repo contents.
+const diagRouter = express.Router();
 
 // Proxies GitHub Releases so the Android app never needs a GitHub credential
 // of its own — GITHUB_TOKEN lives only here, as a server env var, never
 // shipped in the APK. GITHUB_REPO is "owner/repo", e.g. "UdoEmmanuel/pumpkin".
 const GITHUB_REPO = process.env.GITHUB_REPO;
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+
+diagRouter.get(
+  "/download-diag",
+  asyncHandler(async (_req, res) => {
+    const diag = { GITHUB_REPO, hasToken: !!GITHUB_TOKEN, tokenLength: GITHUB_TOKEN ? GITHUB_TOKEN.length : 0 };
+    try {
+      const release = await fetchLatestRelease();
+      diag.releaseTag = release.tag_name;
+      const asset = apkAssetOf(release);
+      diag.assetFound = !!asset;
+      if (!asset) return res.json(diag);
+      diag.declaredAssetSize = asset.size;
+      diag.assetApiUrl = asset.url;
+
+      const assetRes = await fetch(asset.url, { headers: githubHeaders("application/octet-stream") });
+      diag.assetFetchStatus = assetRes.status;
+      diag.assetFetchOk = assetRes.ok;
+      diag.assetContentLengthHeader = assetRes.headers.get("content-length");
+      diag.assetContentTypeHeader = assetRes.headers.get("content-type");
+
+      if (assetRes.ok && assetRes.body) {
+        const buf = Buffer.from(await assetRes.arrayBuffer());
+        diag.actualBytesRead = buf.length;
+        diag.first16BytesHex = buf.subarray(0, 16).toString("hex");
+        diag.last16BytesHex = buf.subarray(-16).toString("hex");
+      } else {
+        diag.errorBodyPreview = await assetRes.text().catch(() => null);
+      }
+    } catch (e) {
+      diag.error = e.message;
+      diag.stack = e.stack;
+    }
+    res.json(diag);
+  })
+);
+
+router.use(requireAuth);
 
 function githubHeaders(accept) {
   return {
@@ -94,4 +135,4 @@ router.get(
   })
 );
 
-module.exports = { router };
+module.exports = { router, diagRouter };

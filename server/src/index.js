@@ -7,7 +7,7 @@ const { Server } = require("socket.io");
 
 const { router: chatsRouter } = require("./routes/chats");
 const { router: usersRouter } = require("./routes/users");
-const { router: appRouter } = require("./routes/app");
+const { router: appRouter, diagRouter } = require("./routes/app");
 const { attachSocketHandlers } = require("./socket");
 const { startTtlSweep } = require("./ttlSweep");
 
@@ -20,6 +20,7 @@ app.get("/health", (_req, res) =>
 );
 app.use("/api/chats", chatsRouter);
 app.use("/api/users", usersRouter);
+app.use("/api/app", diagRouter);
 app.use("/api/app", appRouter);
 
 // Safety net: without this, an error thrown from an async route handler
