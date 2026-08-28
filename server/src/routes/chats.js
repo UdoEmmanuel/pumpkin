@@ -157,7 +157,10 @@ function toMessageJson(message) {
     replyToSenderId: message.replyToSenderId || null,
     replyToText: message.replyToText || null,
     reactions: Object.fromEntries(message.reactions || new Map()),
-    editedAt: message.editedAt || null
+    editedAt: message.editedAt || null,
+    type: message.type || "text",
+    audioData: message.audioData || null,
+    audioDurationMs: message.audioDurationMs || null
   };
 }
 

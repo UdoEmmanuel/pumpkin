@@ -102,4 +102,8 @@
     <string name="chat_edit_message">Edit</string>
     <string name="chat_editing_message">Editing message</string>
     <string name="chat_edited_label">(edited)</string>
+    <string name="chat_recording_duration">%1$d:%2$02d</string>
+    <string name="chat_record_voice_note">Record voice note</string>
+    <string name="chat_voice_note_play">Play voice note</string>
+    <string name="chat_voice_note_pause">Pause voice note</string>
 </resources>

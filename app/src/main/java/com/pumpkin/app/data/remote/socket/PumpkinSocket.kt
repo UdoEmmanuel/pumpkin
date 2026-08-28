@@ -108,7 +108,10 @@ class PumpkinSocket {
         text: String,
         replyToMessageId: String? = null,
         replyToSenderId: String? = null,
-        replyToText: String? = null
+        replyToText: String? = null,
+        type: String = "text",
+        audioData: String? = null,
+        audioDurationMs: Long? = null
     ): Result<MessageDto> =
         emitWithAck(
             "message:send",
@@ -116,6 +119,9 @@ class PumpkinSocket {
                 .put("replyToMessageId", replyToMessageId)
                 .put("replyToSenderId", replyToSenderId)
                 .put("replyToText", replyToText)
+                .put("type", type)
+                .put("audioData", audioData)
+                .put("audioDurationMs", audioDurationMs)
         ) { response ->
             (response.get("message") as JSONObject).let { gson.fromJson(it.toString(), MessageDto::class.java) }
         }

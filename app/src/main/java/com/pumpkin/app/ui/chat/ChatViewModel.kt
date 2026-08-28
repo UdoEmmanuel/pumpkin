@@ -197,6 +197,30 @@ class ChatViewModel(
         }
     }
 
+    /** Called once a press-and-hold recording (see ChatScreen's mic button) finishes. */
+    fun sendVoiceNote(base64Audio: String, durationMs: Long) {
+        val replyTo = _replyingTo.value
+        _replyingTo.value = null
+        viewModelScope.launch {
+            try {
+                repository.sendMessage(
+                    chatId, currentUserId, text = "",
+                    replyToMessageId = replyTo?.id,
+                    replyToSenderId = replyTo?.senderId,
+                    replyToText = replyTo?.text,
+                    type = "voice",
+                    audioData = base64Audio,
+                    audioDurationMs = durationMs
+                )
+                _sendError.value = null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _sendError.value = e.message ?: "Couldn't send voice note"
+            }
+        }
+    }
+
     fun send(text: String) {
         if (text.isBlank()) return
         val replyTo = _replyingTo.value
