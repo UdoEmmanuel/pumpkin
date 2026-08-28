@@ -22,7 +22,8 @@ data class Message(
     val replyToSenderId: String? = null,
     val replyToText: String? = null,
     // uid -> emoji, one reaction per user per message.
-    val reactions: Map<String, String> = emptyMap()
+    val reactions: Map<String, String> = emptyMap(),
+    val editedAt: Long? = null
 ) {
     fun statusFor(otherParticipantId: String): MessageStatus = when {
         readAt.containsKey(otherParticipantId) -> MessageStatus.READ

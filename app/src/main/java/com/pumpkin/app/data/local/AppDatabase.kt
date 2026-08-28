@@ -8,10 +8,10 @@ import androidx.room.TypeConverters
 
 @Database(
     entities = [MessageEntity::class, ChatEntity::class, DraftEntity::class],
-    // Bumped from 5: MessageEntity gained `reactions`. fallbackToDestructiveMigration()
+    // Bumped from 6: MessageEntity gained `editedAt`. fallbackToDestructiveMigration()
     // below wipes and recreates the local (ephemeral, server-backed) tables on any
     // version increase — remember to bump this again for the next schema change.
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

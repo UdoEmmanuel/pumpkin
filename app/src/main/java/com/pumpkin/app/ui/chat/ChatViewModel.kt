@@ -136,6 +136,36 @@ class ChatViewModel(
         _replyingTo.value = null
     }
 
+    private val _editingMessage = MutableStateFlow<Message?>(null)
+    val editingMessage: StateFlow<Message?> = _editingMessage.asStateFlow()
+
+    /** Called from a message bubble's long-press menu (own messages only — see server/src/socket/index.js). */
+    fun startEdit(message: Message) {
+        _editingMessage.value = message
+        _input.value = message.text
+    }
+
+    fun cancelEdit() {
+        _editingMessage.value = null
+        _input.value = ""
+    }
+
+    /** Routes to send() or the in-flight edit depending on whether one's active — bound to the same send button. */
+    fun onSendClicked(text: String) {
+        val editing = _editingMessage.value
+        if (editing != null) submitEdit(editing.id, text) else send(text)
+    }
+
+    private fun submitEdit(messageId: String, text: String) {
+        if (text.isBlank()) return
+        _input.value = ""
+        _editingMessage.value = null
+        viewModelScope.launch {
+            repository.editMessage(chatId, messageId, text)
+                .onFailure { _sendError.value = it.message ?: "Couldn't edit message" }
+        }
+    }
+
     init {
         // Tells PumpkinMessagingService "the user is actually looking at
         // this chat right now" — see CurrentChatTracker kdoc for why plain
@@ -205,7 +235,12 @@ class ChatViewModel(
     /** Called on every keystroke in the input field — typing broadcasts are throttled, draft saves are not (cheap local writes). */
     fun onInputChanged(text: String) {
         _input.value = text
-        repository.saveDraftAsync(chatId, text)
+        // Don't let text being edited into an existing message masquerade as
+        // a draft of a new one — if editing gets cancelled, that would
+        // otherwise leave the edited text sitting there as a stale draft.
+        if (_editingMessage.value == null) {
+            repository.saveDraftAsync(chatId, text)
+        }
 
         val now = System.currentTimeMillis()
         if (text.isBlank()) {

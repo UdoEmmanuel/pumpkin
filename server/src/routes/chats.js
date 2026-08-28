@@ -156,7 +156,8 @@ function toMessageJson(message) {
     replyToMessageId: message.replyToMessageId || null,
     replyToSenderId: message.replyToSenderId || null,
     replyToText: message.replyToText || null,
-    reactions: Object.fromEntries(message.reactions || new Map())
+    reactions: Object.fromEntries(message.reactions || new Map()),
+    editedAt: message.editedAt || null
   };
 }
 

@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
@@ -102,6 +103,7 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
     val currentNickname by viewModel.currentNickname.collectAsState()
     val myNickname by viewModel.myNickname.collectAsState()
     val replyingTo by viewModel.replyingTo.collectAsState()
+    val editingMessage by viewModel.editingMessage.collectAsState()
     val nicknameError by viewModel.nicknameError.collectAsState()
     var showHeaderMenu by remember { mutableStateOf(false) }
     var showNicknameDialog by remember { mutableStateOf(false) }
@@ -346,6 +348,22 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                     }
                 }
             }
+            if (editingMessage != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(R.string.chat_editing_message),
+                        color = MaterialTheme.colorScheme.primary,
+                        fontSize = 13.sp,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = { viewModel.cancelEdit() }) {
+                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.chat_reply_cancel))
+                    }
+                }
+            }
             Row(
                 modifier = Modifier.fillMaxWidth().padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -375,7 +393,7 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                         .background(MaterialTheme.colorScheme.primary),
                     contentAlignment = Alignment.Center
                 ) {
-                    IconButton(onClick = { viewModel.send(input) }) {
+                    IconButton(onClick = { viewModel.onSendClicked(input) }) {
                         Icon(
                             Icons.AutoMirrored.Filled.Send,
                             contentDescription = stringResource(R.string.chat_send),
@@ -430,32 +448,55 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
             onDismissRequest = { reactingToMessage = null },
             title = null,
             text = {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    QUICK_REACTIONS.forEach { emoji ->
-                        Text(
-                            text = emoji,
-                            fontSize = 28.sp,
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        QUICK_REACTIONS.forEach { emoji ->
+                            Text(
+                                text = emoji,
+                                fontSize = 28.sp,
+                                modifier = Modifier
+                                    .clickable {
+                                        viewModel.onReact(target.id, emoji)
+                                        reactingToMessage = null
+                                    }
+                                    .padding(6.dp)
+                            )
+                        }
+                        Icon(
+                            Icons.Filled.Add,
+                            contentDescription = stringResource(R.string.chat_reaction_more),
                             modifier = Modifier
+                                .size(28.dp)
                                 .clickable {
-                                    viewModel.onReact(target.id, emoji)
-                                    reactingToMessage = null
+                                    reactingToMessage = target
+                                    showFullEmojiPicker = true
                                 }
-                                .padding(6.dp)
                         )
                     }
-                    Icon(
-                        Icons.Filled.Add,
-                        contentDescription = stringResource(R.string.chat_reaction_more),
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clickable {
-                                reactingToMessage = target
-                                showFullEmojiPicker = true
-                            }
-                    )
+                    // Only the sender can edit their own message, and only
+                    // while it still exists to be found — see
+                    // server/src/socket/index.js's message:edit handler.
+                    if (target.senderId == currentUserId) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.startEdit(target)
+                                    reactingToMessage = null
+                                }
+                                .padding(top = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Text(
+                                text = stringResource(R.string.chat_edit_message),
+                                modifier = Modifier.padding(start = 12.dp)
+                            )
+                        }
+                    }
                 }
             },
             confirmButton = {}
@@ -633,6 +674,14 @@ private fun MessageRow(
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            if (message.editedAt != null) {
+                Text(
+                    text = stringResource(R.string.chat_edited_label),
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
+            }
             // A read receipt only makes sense on messages *I* sent — it should
             // reflect whether the *recipient* has read it, not my own read
             // state (previously this always checked currentUserId, so an

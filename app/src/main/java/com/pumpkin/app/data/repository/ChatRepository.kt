@@ -213,6 +213,17 @@ class ChatRepository(
         messageDao.upsert(MessageEntity.fromModel(message.toModel()))
     }
 
+    /** Only the original sender can edit, and only while the message still exists — see server/src/socket/index.js. */
+    suspend fun editMessage(chatId: String, messageId: String, text: String): Result<Unit> {
+        return try {
+            val message = socket.editMessage(chatId, messageId, text).getOrElseNetworkError()
+            messageDao.upsert(MessageEntity.fromModel(message.toModel()))
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     /** PRD 4.4: called when the recipient opens and reads a message. */
     suspend fun markRead(chatId: String, messageId: String, readerId: String) {
         socket.markRead(chatId, messageId).getOrElseNetworkError()

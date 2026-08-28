@@ -99,4 +99,7 @@
     <string name="chat_reply_cancel">Cancel reply</string>
     <string name="chat_my_nickname_banner">Called \"%1$s\" here</string>
     <string name="chat_reaction_more">More reactions</string>
+    <string name="chat_edit_message">Edit</string>
+    <string name="chat_editing_message">Editing message</string>
+    <string name="chat_edited_label">(edited)</string>
 </resources>

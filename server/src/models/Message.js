@@ -20,7 +20,12 @@ const messageSchema = new mongoose.Schema(
     replyToText: { type: String, default: null },
     // uid -> emoji. One reaction per user per message (re-reacting replaces
     // it, same emoji again clears it) — see socket message:react.
-    reactions: { type: Map, of: String, default: {} }
+    reactions: { type: Map, of: String, default: {} },
+    // Set the moment the sender edits this message's text — non-null is
+    // what the client uses to show an "edited" label. Only ever settable by
+    // the original sender, and only while the message still exists (there's
+    // nothing else to check: a deleted message can't be found to edit).
+    editedAt: { type: Number, default: null }
   },
   { versionKey: false, _id: false }
 );

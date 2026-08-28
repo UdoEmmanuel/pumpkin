@@ -14,7 +14,8 @@ data class MessageDto(
     val replyToMessageId: String? = null,
     val replyToSenderId: String? = null,
     val replyToText: String? = null,
-    val reactions: Map<String, String> = emptyMap()
+    val reactions: Map<String, String> = emptyMap(),
+    val editedAt: Long? = null
 ) {
     fun toModel() = Message(
         id = id,
@@ -28,6 +29,7 @@ data class MessageDto(
         replyToMessageId = replyToMessageId,
         replyToSenderId = replyToSenderId,
         replyToText = replyToText,
-        reactions = reactions
+        reactions = reactions,
+        editedAt = editedAt
     )
 }
