@@ -73,10 +73,24 @@ router.get(
 
     res.setHeader("Content-Type", "application/vnd.android.package-archive");
     res.setHeader("Content-Disposition", `attachment; filename="${asset.name}"`);
-    if (asset.size) res.setHeader("Content-Length", String(asset.size));
+    // Trust the ACTUAL response's own Content-Length, not the release
+    // metadata's asset.size — those can disagree (e.g. after GitHub's
+    // redirect to the real blob storage URL), and declaring a Content-Length
+    // that doesn't match what's actually streamed silently truncates or
+    // corrupts the download client-side with no error on either end. Safer
+    // to omit it entirely (falls back to chunked transfer-encoding) than to
+    // risk asserting a wrong number.
+    const actualLength = assetRes.headers.get("content-length");
+    if (actualLength) res.setHeader("Content-Length", actualLength);
 
     const { Readable } = require("stream");
-    Readable.fromWeb(assetRes.body).pipe(res);
+    const { pipeline } = require("stream/promises");
+    try {
+      await pipeline(Readable.fromWeb(assetRes.body), res);
+    } catch (e) {
+      console.error("[app/download] stream failed:", e.message);
+      if (!res.headersSent) res.status(502).json({ error: "Download failed mid-stream" });
+    }
   })
 );
 

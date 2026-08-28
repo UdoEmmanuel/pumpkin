@@ -11,6 +11,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
+// Real release APKs have run well over 1MB every time so far — anything
+// smaller than this is almost certainly a truncated download, not a
+// legitimately tiny build.
+private const val MIN_PLAUSIBLE_APK_BYTES = 500_000L
+
 /**
  * "Update app" (chat list overflow menu). Checks/downloads the latest
  * GitHub release through the server's proxy (server/src/routes/app.js) —
@@ -36,10 +41,21 @@ class UpdateRepository(private val api: ChatApi = NetworkModule.chatApi) {
     suspend fun downloadAndInstall(context: Context): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             val body = api.downloadLatestApk()
+            val expectedLength = body.contentLength() // -1 if the server didn't declare one
             val dir = File(context.cacheDir, "updates").apply { mkdirs() }
             val file = File(dir, "pumpkin-update.apk")
-            body.byteStream().use { input ->
+            val actualLength = body.byteStream().use { input ->
                 file.outputStream().use { output -> input.copyTo(output) }
+            }
+
+            // A silently truncated/corrupted download (see server/src/routes/app.js)
+            // reaches the system installer as "package appears to be invalid"
+            // with no useful error — catching a short file here instead gives
+            // an actionable failure and avoids leaving a broken .apk around.
+            val looksTruncated = (expectedLength >= 0 && actualLength != expectedLength) || actualLength < MIN_PLAUSIBLE_APK_BYTES
+            if (looksTruncated) {
+                file.delete()
+                error("Download was incomplete ($actualLength of ${if (expectedLength >= 0) expectedLength else "?"} bytes) — try again")
             }
 
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
