@@ -15,7 +15,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get("/health", (_req, res) => res.json({ ok: true }));
+app.get("/health", (_req, res) =>
+  res.json({ ok: true, commit: process.env.RENDER_GIT_COMMIT || null })
+);
 app.use("/api/chats", chatsRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/app", appRouter);
