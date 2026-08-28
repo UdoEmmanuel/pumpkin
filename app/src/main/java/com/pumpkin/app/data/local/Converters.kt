@@ -27,6 +27,19 @@ class Converters {
     }
 
     @TypeConverter
+    fun fromFloatList(value: List<Float>): String {
+        val array = JSONArray()
+        value.forEach { array.put(it.toDouble()) }
+        return JSONObject().apply { put("items", array) }.toString()
+    }
+
+    @TypeConverter
+    fun toFloatList(value: String): List<Float> {
+        val array = JSONObject(value).optJSONArray("items") ?: return emptyList()
+        return (0 until array.length()).map { array.getDouble(it).toFloat() }
+    }
+
+    @TypeConverter
     fun fromStringLongMap(value: Map<String, Long>): String {
         val json = JSONObject()
         value.forEach { (k, v) -> json.put(k, v) }

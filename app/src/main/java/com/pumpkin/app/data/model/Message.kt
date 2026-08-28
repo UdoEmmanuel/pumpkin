@@ -29,7 +29,12 @@ data class Message(
     // so a deleted message takes its audio with it automatically.
     val type: String = "text",
     val audioData: String? = null,
-    val audioDurationMs: Long? = null
+    val audioDurationMs: Long? = null,
+    // Downsampled amplitude samples (0f..1f) captured while recording, for
+    // the WhatsApp-style playback waveform — empty for messages sent before
+    // this existed, in which case the bubble falls back to a synthetic
+    // per-message waveform rather than showing nothing.
+    val waveform: List<Float> = emptyList()
 ) {
     val isVoiceNote: Boolean get() = type == "voice"
 

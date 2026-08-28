@@ -7,7 +7,12 @@ const messageSchema = new mongoose.Schema(
     _id: { type: String, required: true },
     chatId: { type: String, required: true, index: true },
     senderId: { type: String, required: true },
-    text: { type: String, required: true },
+    // Not `required` — Mongoose's built-in required validator rejects an
+    // empty string for String paths, but message:delete needs to clear this
+    // to "" (see socket/index.js). Every writer already supplies at least
+    // "" explicitly (creation, edit, delete), so this is never undefined in
+    // practice; `default: ""` just documents that.
+    text: { type: String, default: "" },
     sentAt: { type: Number, required: true },
     deliveredAt: { type: Number, default: null },
     readAt: { type: Map, of: Number, default: {} },
@@ -26,6 +31,11 @@ const messageSchema = new mongoose.Schema(
     // the original sender, and only while the message still exists (there's
     // nothing else to check: a deleted message can't be found to edit).
     editedAt: { type: Number, default: null },
+    // Set when the sender deletes this message ("delete for everyone"). The
+    // document is kept (not removed) with its content cleared, so every
+    // client can render a "message was deleted" placeholder in its place —
+    // unlike PRD 4.4 auto-delete, which actually removes the document.
+    deletedAt: { type: Number, default: null },
     // Voice notes, stored inline (base64) on the message document itself —
     // no separate object storage, deliberately: clips are short (client
     // caps recording length) and this way a deleted/auto-deleted message
@@ -34,7 +44,11 @@ const messageSchema = new mongoose.Schema(
     // No second delete path to keep in sync, no external storage bill.
     type: { type: String, enum: ["text", "voice"], default: "text" },
     audioData: { type: String, default: null },
-    audioDurationMs: { type: Number, default: null }
+    audioDurationMs: { type: Number, default: null },
+    // Downsampled amplitude samples (0..1) captured client-side while
+    // recording, for the WhatsApp-style playback waveform — a fixed-size
+    // array (see WAVEFORM_SAMPLE_COUNT in ChatScreen.kt), not raw audio.
+    waveform: { type: [Number], default: [] }
   },
   { versionKey: false, _id: false }
 );

@@ -106,4 +106,15 @@
     <string name="chat_record_voice_note">Record voice note</string>
     <string name="chat_voice_note_play">Play voice note</string>
     <string name="chat_voice_note_pause">Pause voice note</string>
+    <string name="chat_reply_action">Reply</string>
+    <string name="chat_copy_message">Copy</string>
+    <string name="chat_delete_message">Delete</string>
+    <string name="chat_delete_message_confirm">Delete this message? This can\'t be undone.</string>
+    <string name="chat_message_deleted">This message was deleted</string>
+    <string name="chat_recording_cancel">Cancel recording</string>
+    <string name="chat_recording_pause">Pause recording</string>
+    <string name="chat_recording_resume">Resume recording</string>
+    <string name="chat_recording_confirm">Stop recording</string>
+    <string name="chat_recording_delete">Delete recording</string>
+    <string name="chat_recording_send">Send voice note</string>
 </resources>

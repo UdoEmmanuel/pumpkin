@@ -157,11 +157,18 @@ class ChatViewModel(
     }
 
     private fun submitEdit(messageId: String, text: String) {
-        if (text.isBlank()) return
+        val trimmed = text.trim()
+        if (trimmed.isBlank()) return
+        val original = _editingMessage.value
         _input.value = ""
         _editingMessage.value = null
+        // Nothing actually changed (including a case that's only different
+        // by whitespace, which trim() above already normalized away) — skip
+        // the network call entirely so the message doesn't pick up an
+        // "(edited)" label for a no-op edit.
+        if (original != null && original.text == trimmed) return
         viewModelScope.launch {
-            repository.editMessage(chatId, messageId, text)
+            repository.editMessage(chatId, messageId, trimmed)
                 .onFailure { _sendError.value = it.message ?: "Couldn't edit message" }
         }
     }
@@ -198,7 +205,7 @@ class ChatViewModel(
     }
 
     /** Called once a press-and-hold recording (see ChatScreen's mic button) finishes. */
-    fun sendVoiceNote(base64Audio: String, durationMs: Long) {
+    fun sendVoiceNote(base64Audio: String, durationMs: Long, waveform: List<Float> = emptyList()) {
         val replyTo = _replyingTo.value
         _replyingTo.value = null
         viewModelScope.launch {
@@ -210,7 +217,8 @@ class ChatViewModel(
                     replyToText = replyTo?.text,
                     type = "voice",
                     audioData = base64Audio,
-                    audioDurationMs = durationMs
+                    audioDurationMs = durationMs,
+                    waveform = waveform
                 )
                 _sendError.value = null
             } catch (e: CancellationException) {
@@ -222,7 +230,12 @@ class ChatViewModel(
     }
 
     fun send(text: String) {
-        if (text.isBlank()) return
+        // Strips leading/trailing whitespace — including empty leading or
+        // trailing lines, since those are whitespace too — so a message
+        // never goes out (or gets stored/rendered) with padding the sender
+        // didn't mean to add.
+        val trimmed = text.trim()
+        if (trimmed.isBlank()) return
         val replyTo = _replyingTo.value
         // Optimistic clear, same as before this owned the field — plus the
         // draft it was backed by, so a sent message doesn't leave a stale
@@ -233,7 +246,7 @@ class ChatViewModel(
         viewModelScope.launch {
             try {
                 repository.sendMessage(
-                    chatId, currentUserId, text,
+                    chatId, currentUserId, trimmed,
                     replyToMessageId = replyTo?.id,
                     replyToSenderId = replyTo?.senderId,
                     replyToText = replyTo?.text
@@ -247,6 +260,14 @@ class ChatViewModel(
             }
         }
         broadcastTyping(isTyping = false, force = true)
+    }
+
+    /** Called from a message bubble's long-press menu, after the user confirms. */
+    fun deleteMessage(message: Message) {
+        viewModelScope.launch {
+            repository.deleteMessage(chatId, message.id)
+                .onFailure { _sendError.value = it.message ?: "Couldn't delete message" }
+        }
     }
 
     /** Called from a message bubble's reaction picker. Same emoji tapped again clears it. */
