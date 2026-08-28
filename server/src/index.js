@@ -7,7 +7,7 @@ const { Server } = require("socket.io");
 
 const { router: chatsRouter } = require("./routes/chats");
 const { router: usersRouter } = require("./routes/users");
-const { router: appRouter, diagRouter } = require("./routes/app");
+const { router: appRouter } = require("./routes/app");
 const { attachSocketHandlers } = require("./socket");
 const { startTtlSweep } = require("./ttlSweep");
 
@@ -15,12 +15,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get("/health", (_req, res) =>
-  res.json({ ok: true, commit: process.env.RENDER_GIT_COMMIT || null })
-);
+app.get("/health", (_req, res) => res.json({ ok: true }));
 app.use("/api/chats", chatsRouter);
 app.use("/api/users", usersRouter);
-app.use("/api/app", diagRouter);
 app.use("/api/app", appRouter);
 
 // Safety net: without this, an error thrown from an async route handler

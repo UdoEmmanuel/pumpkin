@@ -3,80 +3,13 @@ const { requireAuth } = require("../middleware/auth");
 const { asyncHandler } = require("../asyncHandler");
 
 const router = express.Router();
-// Unauthenticated diagnostic router — TEMPORARY, for debugging the
-// update-download corruption issue directly (no Firebase token needed).
-// Remove once resolved. Reveals only byte counts / a hex prefix of an
-// asset the account already owns, not the token or repo contents.
-const diagRouter = express.Router();
+router.use(requireAuth);
 
 // Proxies GitHub Releases so the Android app never needs a GitHub credential
 // of its own — GITHUB_TOKEN lives only here, as a server env var, never
 // shipped in the APK. GITHUB_REPO is "owner/repo", e.g. "UdoEmmanuel/pumpkin".
 const GITHUB_REPO = process.env.GITHUB_REPO;
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
-
-diagRouter.get(
-  "/download-diag",
-  asyncHandler(async (_req, res) => {
-    const diag = { GITHUB_REPO, hasToken: !!GITHUB_TOKEN, tokenLength: GITHUB_TOKEN ? GITHUB_TOKEN.length : 0 };
-    try {
-      const release = await fetchLatestRelease();
-      diag.releaseTag = release.tag_name;
-      const asset = apkAssetOf(release);
-      diag.assetFound = !!asset;
-      if (!asset) return res.json(diag);
-      diag.declaredAssetSize = asset.size;
-      diag.assetApiUrl = asset.url;
-
-      const assetRes = await fetch(asset.url, { headers: githubHeaders("application/octet-stream") });
-      diag.assetFetchStatus = assetRes.status;
-      diag.assetFetchOk = assetRes.ok;
-      diag.assetContentLengthHeader = assetRes.headers.get("content-length");
-      diag.assetContentTypeHeader = assetRes.headers.get("content-type");
-
-      if (assetRes.ok && assetRes.body) {
-        const buf = Buffer.from(await assetRes.arrayBuffer());
-        diag.actualBytesRead = buf.length;
-        diag.first16BytesHex = buf.subarray(0, 16).toString("hex");
-        diag.last16BytesHex = buf.subarray(-16).toString("hex");
-      } else {
-        diag.errorBodyPreview = await assetRes.text().catch(() => null);
-      }
-    } catch (e) {
-      diag.error = e.message;
-      diag.stack = e.stack;
-    }
-    res.json(diag);
-  })
-);
-
-// Identical to the real /download route below, just unauthenticated — lets
-// me test the actual streaming path (as opposed to /download-diag's
-// buffered read) directly against the live server. TEMPORARY.
-diagRouter.get("/download-diag-stream", asyncHandler(async (_req, res) => {
-  const release = await fetchLatestRelease();
-  const asset = apkAssetOf(release);
-  if (!asset) return res.status(404).json({ error: "no asset" });
-
-  const assetRes = await fetch(asset.url, { headers: githubHeaders("application/octet-stream") });
-  if (!assetRes.ok || !assetRes.body) return res.status(502).json({ error: "fetch failed" });
-
-  res.setHeader("Content-Type", "application/vnd.android.package-archive");
-  res.setHeader("Content-Disposition", `attachment; filename="${asset.name}"`);
-  const actualLength = assetRes.headers.get("content-length");
-  if (actualLength) res.setHeader("Content-Length", actualLength);
-
-  const { Readable } = require("stream");
-  const { pipeline } = require("stream/promises");
-  try {
-    await pipeline(Readable.fromWeb(assetRes.body), res);
-  } catch (e) {
-    console.error("[download-diag-stream] failed:", e.message);
-    if (!res.headersSent) res.status(502).json({ error: "stream failed: " + e.message });
-  }
-}));
-
-router.use(requireAuth);
 
 function githubHeaders(accept) {
   return {
@@ -161,4 +94,4 @@ router.get(
   })
 );
 
-module.exports = { router, diagRouter };
+module.exports = { router };

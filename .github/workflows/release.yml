@@ -66,10 +66,21 @@ jobs:
 
       # Overwrites the checked-in versionCode/versionName for this build
       # only (working tree, not committed) — see "Determine next version".
+      #
+      # versionCode offset: github.run_number restarts low (this workflow's
+      # own run count) and has no relation to versionCodes set by manual
+      # builds before this pipeline existed — plain run_number produced
+      # versionCode 5 while a manually-built release already on a device had
+      # versionCode 7. Android refuses to install anything with a
+      # versionCode <= what's installed (INSTALL_FAILED_VERSION_DOWNGRADE),
+      # which some installers surface as a generic "package appears to be
+      # invalid" rather than a clear downgrade error — that's what this was.
+      # 100000 is comfortably above any versionCode this project has ever
+      # used, manual or automated, with enormous headroom to keep climbing.
       - name: Apply computed version
         run: |
-          run_number="${{ github.run_number }}"
-          sed -i "s/versionCode = .*/versionCode = $run_number/" app/build.gradle.kts
+          version_code=$((100000 + ${{ github.run_number }}))
+          sed -i "s/versionCode = .*/versionCode = $version_code/" app/build.gradle.kts
           sed -i "s/versionName = \".*\"/versionName = \"${{ steps.version.outputs.version }}\"/" app/build.gradle.kts
 
       - name: Build signed release APK
