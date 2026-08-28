@@ -158,9 +158,11 @@ function toMessageJson(message) {
     replyToText: message.replyToText || null,
     reactions: Object.fromEntries(message.reactions || new Map()),
     editedAt: message.editedAt || null,
+    deletedAt: message.deletedAt || null,
     type: message.type || "text",
     audioData: message.audioData || null,
-    audioDurationMs: message.audioDurationMs || null
+    audioDurationMs: message.audioDurationMs || null,
+    waveform: message.waveform || []
   };
 }
 

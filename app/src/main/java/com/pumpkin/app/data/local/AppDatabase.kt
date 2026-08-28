@@ -8,11 +8,12 @@ import androidx.room.TypeConverters
 
 @Database(
     entities = [MessageEntity::class, ChatEntity::class, DraftEntity::class],
-    // Bumped from 7: MessageEntity gained voice-note fields (type/audioData/
-    // audioDurationMs). fallbackToDestructiveMigration() below wipes and
-    // recreates the local (ephemeral, server-backed) tables on any version
-    // increase — remember to bump this again for the next schema change.
-    version = 8,
+    // Bumped from 8: MessageEntity gained a `waveform` field (voice-note
+    // amplitude samples for the playback waveform).
+    // fallbackToDestructiveMigration() below wipes and recreates the local
+    // (ephemeral, server-backed) tables on any version increase — remember
+    // to bump this again for the next schema change.
+    version = 9,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

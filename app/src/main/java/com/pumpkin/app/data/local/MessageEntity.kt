@@ -29,7 +29,8 @@ data class MessageEntity(
     val editedAt: Long? = null,
     val type: String = "text",
     val audioData: String? = null,
-    val audioDurationMs: Long? = null
+    val audioDurationMs: Long? = null,
+    val waveform: List<Float> = emptyList()
 ) {
     fun toModel() = Message(
         id = id,
@@ -48,7 +49,8 @@ data class MessageEntity(
         editedAt = editedAt,
         type = type,
         audioData = audioData,
-        audioDurationMs = audioDurationMs
+        audioDurationMs = audioDurationMs,
+        waveform = waveform
     )
 
     companion object {
@@ -69,7 +71,8 @@ data class MessageEntity(
             editedAt = message.editedAt,
             type = message.type,
             audioData = message.audioData,
-            audioDurationMs = message.audioDurationMs
+            audioDurationMs = message.audioDurationMs,
+            waveform = message.waveform
         )
     }
 }

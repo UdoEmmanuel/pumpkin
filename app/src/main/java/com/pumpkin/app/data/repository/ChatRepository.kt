@@ -203,10 +203,11 @@ class ChatRepository(
         replyToText: String? = null,
         type: String = "text",
         audioData: String? = null,
-        audioDurationMs: Long? = null
+        audioDurationMs: Long? = null,
+        waveform: List<Float>? = null
     ) {
         val message = socket.sendMessage(
-            chatId, text, replyToMessageId, replyToSenderId, replyToText, type, audioData, audioDurationMs
+            chatId, text, replyToMessageId, replyToSenderId, replyToText, type, audioData, audioDurationMs, waveform
         ).getOrElseNetworkError()
         messageDao.upsert(MessageEntity.fromModel(message.toModel()))
     }
@@ -221,6 +222,24 @@ class ChatRepository(
     suspend fun editMessage(chatId: String, messageId: String, text: String): Result<Unit> {
         return try {
             val message = socket.editMessage(chatId, messageId, text).getOrElseNetworkError()
+            messageDao.upsert(MessageEntity.fromModel(message.toModel()))
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * "Delete for everyone" — only the original sender (see
+     * server/src/socket/index.js). This is a soft delete: the server keeps
+     * the document with its content cleared and deletedAt set, so it comes
+     * back through the normal message:updated path and Room just gets an
+     * upsert (not a removal) — MessageRow renders the placeholder for
+     * whatever has deletedAt != null.
+     */
+    suspend fun deleteMessage(chatId: String, messageId: String): Result<Unit> {
+        return try {
+            val message = socket.deleteMessage(chatId, messageId).getOrElseNetworkError()
             messageDao.upsert(MessageEntity.fromModel(message.toModel()))
             Result.success(Unit)
         } catch (e: Exception) {

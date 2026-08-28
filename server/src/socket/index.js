@@ -79,7 +79,7 @@ function attachSocketHandlers(io) {
     socket.on(
       "message:send",
       async (
-        { chatId, text, replyToMessageId, replyToSenderId, replyToText, type, audioData, audioDurationMs },
+        { chatId, text, replyToMessageId, replyToSenderId, replyToText, type, audioData, audioDurationMs, waveform },
         ack
       ) => {
       console.log(`[send] chat=${chatId} from=${socket.userId} text=${JSON.stringify(text)}`);
@@ -91,18 +91,24 @@ function attachSocketHandlers(io) {
         if (audioData && audioData.length > 12_000_000) {
           return ack?.({ ok: false, error: "Voice note too long" });
         }
+        // Defensively capped — this should always be the ~40-sample
+        // downsampled array ChatScreen.kt sends, never raw per-tick data.
+        const safeWaveform = Array.isArray(waveform)
+          ? waveform.slice(0, 200).map((n) => Number(n) || 0)
+          : [];
         const message = await Message.create({
           _id: randomUUID(),
           chatId,
           senderId: socket.userId,
-          text: text || "",
+          text: (text || "").trim(),
           sentAt: Date.now(),
           replyToMessageId: replyToMessageId || null,
           replyToSenderId: replyToSenderId || null,
           replyToText: replyToText || null,
           type: type === "voice" ? "voice" : "text",
           audioData: audioData || null,
-          audioDurationMs: audioDurationMs || null
+          audioDurationMs: audioDurationMs || null,
+          waveform: safeWaveform
         });
         io.to(chatMessageRoom(chatId)).emit("message:new", toMessageJson(message));
         ack?.({ ok: true, message: toMessageJson(message) });
@@ -126,8 +132,43 @@ function attachSocketHandlers(io) {
         const trimmed = (text || "").trim();
         if (!trimmed) return ack?.({ ok: false, error: "Message can't be empty" });
 
+        // Only actually a change if the trimmed text differs — the client
+        // already skips calling this when it doesn't, but guard here too
+        // so no other caller can stamp an "(edited)" label on a no-op.
+        if (trimmed === existing.text) {
+          return ack?.({ ok: true, message: toMessageJson(existing) });
+        }
+
         existing.text = trimmed;
         existing.editedAt = Date.now();
+        await existing.save();
+
+        io.to(chatMessageRoom(chatId)).emit("message:updated", toMessageJson(existing));
+        ack?.({ ok: true, message: toMessageJson(existing) });
+      } catch (e) {
+        ack?.({ ok: false, error: e.message });
+      }
+    });
+
+    // "Delete for everyone" — only the original sender, same restriction as
+    // message:edit. Clears the content but keeps the document (with
+    // deletedAt set) instead of removing it, so every client can render a
+    // "message was deleted" placeholder rather than having the bubble
+    // vanish outright — unlike PRD 4.4 auto-delete, which is a hard delete.
+    socket.on("message:delete", async ({ chatId, messageId }, ack) => {
+      try {
+        const existing = await Message.findById(messageId);
+        if (!existing) return ack?.({ ok: false, error: "Message not found" });
+        if (existing.senderId !== socket.userId) {
+          return ack?.({ ok: false, error: "Can't delete someone else's message" });
+        }
+
+        existing.text = "";
+        existing.audioData = null;
+        existing.audioDurationMs = null;
+        existing.waveform = [];
+        existing.reactions = new Map();
+        existing.deletedAt = Date.now();
         await existing.save();
 
         io.to(chatMessageRoom(chatId)).emit("message:updated", toMessageJson(existing));

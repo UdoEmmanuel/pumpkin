@@ -71,6 +71,35 @@ class VoiceRecorder(private val context: Context) {
         }
     }
 
+    /** minSdk is 24, exactly where MediaRecorder.pause()/resume() were introduced — no version gate needed. */
+    fun pause() {
+        try {
+            recorder?.pause()
+        } catch (_: Exception) {
+            // Nothing usable to do if the recorder wasn't in a pausable state — ignore.
+        }
+    }
+
+    fun resume() {
+        try {
+            recorder?.resume()
+        } catch (_: Exception) {
+            // Same as pause() — ignore.
+        }
+    }
+
+    /**
+     * Peak input level since the last call to this method, 0..32767 (per
+     * MediaRecorder's own scale) — polled periodically to drive the live
+     * waveform while recording. Returns 0 if there's nothing to sample
+     * rather than throwing, since this is purely cosmetic.
+     */
+    fun getMaxAmplitude(): Int = try {
+        recorder?.maxAmplitude ?: 0
+    } catch (_: Exception) {
+        0
+    }
+
     fun cancel() {
         try {
             recorder?.stop()

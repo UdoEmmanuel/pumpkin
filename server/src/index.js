@@ -31,7 +31,12 @@ app.use((err, _req, res, _next) => {
 });
 
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+// Default engine.io maxHttpBufferSize is 1MB, well under the 12MB base64
+// voice-note cap enforced in socket/index.js's message:send handler — a
+// clip anywhere near that cap got silently rejected/disconnected by the
+// transport before ever reaching that check, surfacing to the client as a
+// generic "failed to send" with no useful error. Raised to match.
+const io = new Server(server, { cors: { origin: "*" }, maxHttpBufferSize: 15_000_000 });
 app.set("io", io);
 attachSocketHandlers(io);
 

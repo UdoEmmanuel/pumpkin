@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.coroutines.resume
 
@@ -111,7 +112,8 @@ class PumpkinSocket {
         replyToText: String? = null,
         type: String = "text",
         audioData: String? = null,
-        audioDurationMs: Long? = null
+        audioDurationMs: Long? = null,
+        waveform: List<Float>? = null
     ): Result<MessageDto> =
         emitWithAck(
             "message:send",
@@ -122,6 +124,7 @@ class PumpkinSocket {
                 .put("type", type)
                 .put("audioData", audioData)
                 .put("audioDurationMs", audioDurationMs)
+                .put("waveform", waveform?.let { samples -> JSONArray(samples) })
         ) { response ->
             (response.get("message") as JSONObject).let { gson.fromJson(it.toString(), MessageDto::class.java) }
         }
@@ -130,6 +133,15 @@ class PumpkinSocket {
         emitWithAck(
             "message:edit",
             JSONObject().put("chatId", chatId).put("messageId", messageId).put("text", text)
+        ) { response ->
+            (response.get("message") as JSONObject).let { gson.fromJson(it.toString(), MessageDto::class.java) }
+        }
+
+    /** "Delete for everyone" — server only allows the original sender, see socket/index.js. */
+    suspend fun deleteMessage(chatId: String, messageId: String): Result<MessageDto> =
+        emitWithAck(
+            "message:delete",
+            JSONObject().put("chatId", chatId).put("messageId", messageId)
         ) { response ->
             (response.get("message") as JSONObject).let { gson.fromJson(it.toString(), MessageDto::class.java) }
         }
