@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.coroutines.resume
@@ -207,24 +208,37 @@ class PumpkinSocket {
         event: String,
         payload: JSONObject,
         onAck: (JSONObject) -> T
-    ): Result<T> = suspendCancellableCoroutine { cont ->
+    ): Result<T> {
         val s = socket
         if (s == null || !s.connected()) {
-            cont.resume(Result.failure(IllegalStateException("Not connected to server")))
-            return@suspendCancellableCoroutine
+            return Result.failure(IllegalStateException("Not connected to server"))
         }
-        // socket.io-client's ack overload requires the args as an explicit
-        // Object[] (not varargs) alongside the Ack — emit(event, args...)
-        // and emit(event, args, ack) are different overloads, and Kotlin
-        // won't let a trailing lambda merge into a vararg call site.
-        s.emit(event, arrayOf<Any>(payload)) { args ->
-            val response = args.getOrNull(0) as? JSONObject
-            when {
-                response == null -> cont.resume(Result.failure(IllegalStateException("No response from server")))
-                response.optBoolean("ok", false) -> cont.resume(Result.success(onAck(response)))
-                else -> cont.resume(Result.failure(IllegalStateException(response.optString("error", "Request failed"))))
+        // Bounded with withTimeoutOrNull: this socket.io-client version (2.1.1)
+        // has no built-in ack timeout, so without this a dropped/oversized
+        // packet that never gets an ack left the suspended coroutine hanging
+        // forever — no failure, no success, the caller just never resumes.
+        // If the timeout wins, cont.isActive below goes false, so a late ack
+        // that arrives afterward is a harmless no-op instead of a crash from
+        // resuming an already-cancelled continuation.
+        val result = withTimeoutOrNull(15_000) {
+            suspendCancellableCoroutine<Result<T>> { cont ->
+                // socket.io-client's ack overload requires the args as an
+                // explicit Object[] (not varargs) alongside the Ack —
+                // emit(event, args...) and emit(event, args, ack) are
+                // different overloads, and Kotlin won't let a trailing
+                // lambda merge into a vararg call site.
+                s.emit(event, arrayOf<Any>(payload)) { args ->
+                    val response = args.getOrNull(0) as? JSONObject
+                    val outcome = when {
+                        response == null -> Result.failure(IllegalStateException("No response from server"))
+                        response.optBoolean("ok", false) -> Result.success(onAck(response))
+                        else -> Result.failure(IllegalStateException(response.optString("error", "Request failed")))
+                    }
+                    if (cont.isActive) cont.resume(outcome)
+                }
             }
         }
+        return result ?: Result.failure(IllegalStateException("Request timed out"))
     }
 }
 
