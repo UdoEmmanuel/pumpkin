@@ -4,7 +4,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.onEach
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -63,7 +67,20 @@ fun PumpkinNavHost(activity: FragmentActivity) {
     // invokes the factory once per backstack entry) — which then crashed the
     // app the moment it tried to write a Firestore update with that empty id
     // as part of a field path (see ChatRepository.updateTimestampField).
-    val currentUser by remember { authRepository.observeAuthState() }.collectAsState(initial = null)
+    // `authStateResolved` disambiguates collectAsState's initial `null`
+    // placeholder from a REAL "signed out" emission from Firebase. Right
+    // after a cold start (the app process was killed in the background and
+    // just relaunched — routine on Android), FirebaseAuth's persisted
+    // session takes a moment to restore from disk, so `currentUser` can
+    // briefly read null even though the user is actually still signed in.
+    // Users were being "knocked out" — routed to the login screen right
+    // after unlocking — specifically because the LOCK screen below used to
+    // make its routing decision off that transient null instead of waiting
+    // for the listener's first real callback (see onEach below).
+    var authStateResolved by remember { mutableStateOf(false) }
+    val currentUser by remember {
+        authRepository.observeAuthState().onEach { authStateResolved = true }
+    }.collectAsState(initial = null)
 
     // Registers this install's FCM token on every cold start with an
     // already-signed-in user (persisted Firebase session), not just right
@@ -87,14 +104,29 @@ fun PumpkinNavHost(activity: FragmentActivity) {
             }
         }
         composable(Routes.LOCK) {
-            LockScreen(
-                activity = activity,
-                onUnlocked = {
+            var unlocked by remember { mutableStateOf(false) }
+            // A 3s safety valve — observeAuthState()'s listener is expected
+            // to always fire at least once, but if it somehow never does,
+            // this stops the user from being stuck on the lock screen
+            // forever after entering a correct PIN/biometric.
+            LaunchedEffect(Unit) {
+                delay(3_000)
+                authStateResolved = true
+            }
+            // Waits for both: the PIN/biometric to pass, AND the real
+            // (not-placeholder) auth state to be known — see the
+            // authStateResolved kdoc above for why the latter matters.
+            LaunchedEffect(unlocked, authStateResolved) {
+                if (unlocked && authStateResolved) {
                     val destination = if (currentUser != null) Routes.CHAT_LIST else Routes.AUTH
                     navController.navigate(destination) {
                         popUpTo(Routes.CALCULATOR) { inclusive = false }
                     }
                 }
+            }
+            LockScreen(
+                activity = activity,
+                onUnlocked = { unlocked = true }
             )
         }
         composable(Routes.AUTH) {
