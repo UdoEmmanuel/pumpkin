@@ -1096,9 +1096,38 @@ private fun PlaybackWaveform(
     progress: Float,
     playedColor: Color,
     unplayedColor: Color,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // Fraction (0f..1f) of the tap/drag position along the waveform's
+    // width — null disables seeking (e.g. nothing to seek in yet). Fires on
+    // press and continuously while dragging, so a plain tap seeks and a
+    // drag scrubs, regardless of whether playback is currently running.
+    onSeek: ((Float) -> Unit)? = null
 ) {
-    Canvas(modifier = modifier) {
+    Canvas(
+        modifier = modifier.then(
+            if (onSeek != null) {
+                Modifier.pointerInput(onSeek) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown()
+                        onSeek((down.position.x / size.width).coerceIn(0f, 1f))
+                        down.consume()
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            if (!change.pressed) {
+                                change.consume()
+                                break
+                            }
+                            onSeek((change.position.x / size.width).coerceIn(0f, 1f))
+                            change.consume()
+                        }
+                    }
+                }
+            } else {
+                Modifier
+            }
+        )
+    ) {
         if (samples.isEmpty()) return@Canvas
         val count = samples.size
         val slot = size.width / count
@@ -1513,42 +1542,60 @@ private fun VoiceNoteBubble(message: Message, isOwnMessage: Boolean) {
     val dimTint = tint.copy(alpha = 0.35f)
     val progress = if (durationMs > 0) positionMs.toFloat() / durationMs else 0f
 
+    // Lazily decodes the base64 audio to a cache file and creates the
+    // MediaPlayer on first use (by either the play button or a seek), but
+    // never starts it — separated out of the play button's onClick so
+    // seeking works identically whether or not playback has started yet.
+    fun ensurePlayer(): android.media.MediaPlayer? {
+        playerRef.value?.let { return it }
+        val audioData = message.audioData ?: return null
+        val bytes = android.util.Base64.decode(audioData, android.util.Base64.NO_WRAP)
+        val dir = java.io.File(context.cacheDir, "voice_in").apply { mkdirs() }
+        val file = java.io.File(dir, "${message.id}.m4a")
+        if (!file.exists()) file.writeBytes(bytes)
+        return android.media.MediaPlayer().apply {
+            setDataSource(file.absolutePath)
+            prepare()
+            setOnCompletionListener {
+                isPlaying = false
+                positionMs = 0
+            }
+        }.also { playerRef.value = it }
+    }
+
+    // Tap-or-drag-to-seek on the waveform — works whether playback is
+    // running or paused, matching a normal media player's scrubber rather
+    // than requiring playback to already be in progress.
+    fun seekToFraction(fraction: Float) {
+        if (durationMs <= 0) return
+        val player = ensurePlayer() ?: return
+        val target = (fraction * durationMs).toInt().coerceIn(0, durationMs)
+        player.seekTo(target)
+        positionMs = target
+    }
+
     Column(modifier = Modifier.width(VOICE_NOTE_BUBBLE_WIDTH)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(
                 modifier = Modifier.size(40.dp),
                 onClick = {
-                val current = playerRef.value
-                if (isPlaying) {
-                    current?.pause()
-                    isPlaying = false
-                    return@IconButton
-                }
-                val player = current ?: run {
-                    val audioData = message.audioData ?: return@IconButton
-                    val bytes = android.util.Base64.decode(audioData, android.util.Base64.NO_WRAP)
-                    val dir = java.io.File(context.cacheDir, "voice_in").apply { mkdirs() }
-                    val file = java.io.File(dir, "${message.id}.m4a")
-                    if (!file.exists()) file.writeBytes(bytes)
-                    android.media.MediaPlayer().apply {
-                        setDataSource(file.absolutePath)
-                        prepare()
-                        setOnCompletionListener {
-                            isPlaying = false
-                            positionMs = 0
+                    if (isPlaying) {
+                        playerRef.value?.pause()
+                        isPlaying = false
+                        return@IconButton
+                    }
+                    val player = ensurePlayer() ?: return@IconButton
+                    if (positionMs > 0) player.seekTo(positionMs)
+                    player.start()
+                    isPlaying = true
+                    coroutineScope.launch {
+                        while (isPlaying) {
+                            positionMs = playerRef.value?.currentPosition ?: 0
+                            delay(200)
                         }
-                    }.also { playerRef.value = it }
-                }
-                if (positionMs > 0) player.seekTo(positionMs)
-                player.start()
-                isPlaying = true
-                coroutineScope.launch {
-                    while (isPlaying) {
-                        positionMs = playerRef.value?.currentPosition ?: 0
-                        delay(200)
                     }
                 }
-            }) {
+            ) {
                 Icon(
                     if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                     contentDescription = stringResource(
@@ -1565,7 +1612,8 @@ private fun VoiceNoteBubble(message: Message, isOwnMessage: Boolean) {
                 modifier = Modifier
                     .weight(1f)
                     .height(27.dp)
-                    .padding(start = 2.dp, end = 6.dp)
+                    .padding(start = 2.dp, end = 6.dp),
+                onSeek = { fraction -> seekToFraction(fraction) }
             )
         }
         Row(
