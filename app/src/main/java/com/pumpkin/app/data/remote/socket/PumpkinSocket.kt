@@ -90,6 +90,19 @@ class PumpkinSocket {
         s.on("presence:update") { args ->
             (args.getOrNull(0) as? JSONObject)?.let { _presenceUpdate.tryEmit(it.toPresenceUpdate()) }
         }
+        // Without this, a handshake rejected by the server (stale/expired
+        // token, clock skew) failed completely silently: engine.io's own
+        // reconnection logic keeps retrying with this same socket instance —
+        // and the same now-fixed auth token from options.auth above — so it
+        // can wedge itself into retrying forever with a token that will
+        // never be accepted. Clearing `socket` here just makes `isConnected`
+        // correctly report false, so the next call to connect() (app
+        // foreground, opening a chat, etc.) builds a fresh Socket with a
+        // newly-fetched token instead of assuming this dead one is fine.
+        s.on(Socket.EVENT_CONNECT_ERROR) { args ->
+            android.util.Log.w("PumpkinSocket", "Socket connect_error: ${args.getOrNull(0)}")
+            if (socket === s) socket = null
+        }
 
         s.connect()
         socket = s
