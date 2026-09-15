@@ -3,6 +3,7 @@ package com.pumpkin.app.data.local
 import android.content.Context
 import android.media.MediaRecorder
 import android.os.Build
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import java.io.File
 
 /**
@@ -25,10 +26,18 @@ class VoiceRecorder(private val context: Context) {
         const val MAX_DURATION_MS = 120_000L
     }
 
-    fun start(): File {
+    /**
+     * Returns the file recording is about to write to, or null if recording
+     * couldn't start at all (mic held by another app/call, no storage, a
+     * device/OS combination that rejects this encoder setup, etc.) —
+     * previously an exception here (MediaRecorder.prepare()/start() both
+     * throw on failure) went uncaught and crashed the app the moment
+     * someone pressed the mic button, which is about as common an action as
+     * a chat app has.
+     */
+    fun start(): File? {
         val dir = File(context.cacheDir, "voice_out").apply { mkdirs() }
         val file = File(dir, "recording_${System.currentTimeMillis()}.m4a")
-        outputFile = file
 
         val r = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             MediaRecorder(context)
@@ -36,18 +45,28 @@ class VoiceRecorder(private val context: Context) {
             @Suppress("DEPRECATION")
             MediaRecorder()
         }
-        r.setAudioSource(MediaRecorder.AudioSource.MIC)
-        r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-        r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-        r.setAudioEncodingBitRate(32_000)
-        r.setAudioSamplingRate(44_100)
-        r.setMaxDuration(MAX_DURATION_MS.toInt())
-        r.setOutputFile(file.absolutePath)
-        r.prepare()
-        r.start()
-        recorder = r
-        startedAt = System.currentTimeMillis()
-        return file
+        return try {
+            r.setAudioSource(MediaRecorder.AudioSource.MIC)
+            r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            r.setAudioEncodingBitRate(32_000)
+            r.setAudioSamplingRate(44_100)
+            r.setMaxDuration(MAX_DURATION_MS.toInt())
+            r.setOutputFile(file.absolutePath)
+            r.prepare()
+            r.start()
+            recorder = r
+            outputFile = file
+            startedAt = System.currentTimeMillis()
+            file
+        } catch (e: Exception) {
+            FirebaseCrashlytics.getInstance().recordException(e)
+            runCatching { r.release() }
+            recorder = null
+            outputFile = null
+            file.delete()
+            null
+        }
     }
 
     /** Returns the recorded file and its duration, or null if nothing usable was recorded. */

@@ -104,6 +104,7 @@
     <string name="chat_edited_label">(edited)</string>
     <string name="chat_recording_duration">%1$d:%2$02d</string>
     <string name="chat_record_voice_note">Record voice note</string>
+    <string name="chat_recording_start_failed">Couldn\'t start recording — mic may be in use by another app</string>
     <string name="chat_voice_note_play">Play voice note</string>
     <string name="chat_voice_note_pause">Pause voice note</string>
     <string name="chat_reply_action">Reply</string>
