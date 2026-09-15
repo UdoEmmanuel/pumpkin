@@ -42,7 +42,16 @@ jobs:
           distribution: "temurin"
 
       - name: Set up Android SDK
+        # Overrides the action's own default packages ("tools platform-tools")
+        # — Google has removed the legacy standalone "tools" package from the
+        # SDK repository entirely, so requesting it now fails outright with
+        # "Failed to find package 'tools'" before the build ever starts. The
+        # Android Gradle Plugin resolves build-tools/platforms itself, so
+        # platform-tools (adb etc.) is the only SDK package this workflow
+        # actually needs from this action.
         uses: android-actions/setup-android@v4
+        with:
+          packages: "platform-tools"
 
       # Gitignored, never committed — the Google Services plugin (Firebase)
       # can't run without it, same reasoning as the keystore below.
