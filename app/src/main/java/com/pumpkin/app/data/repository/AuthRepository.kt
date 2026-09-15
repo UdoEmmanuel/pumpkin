@@ -3,6 +3,7 @@ package com.pumpkin.app.data.repository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.messaging.FirebaseMessaging
 import com.pumpkin.app.data.model.User
 import com.pumpkin.app.data.remote.NetworkModule
@@ -46,7 +47,14 @@ class AuthRepository(
 
     /** Emits the current user immediately, then on every sign-in/sign-out. */
     fun observeAuthState(): Flow<FirebaseUser?> = callbackFlow {
-        val listener = FirebaseAuth.AuthStateListener { trySend(it.currentUser) }
+        val listener = FirebaseAuth.AuthStateListener {
+            // Tags every subsequent crash/non-fatal report with the signed-in
+            // uid (cleared on sign-out) — lets a specific user's reports be
+            // found on the Crashlytics dashboard by uid instead of having to
+            // guess which anonymous report is theirs.
+            FirebaseCrashlytics.getInstance().setUserId(it.currentUser?.uid ?: "")
+            trySend(it.currentUser)
+        }
         auth.addAuthStateListener(listener)
         awaitClose { auth.removeAuthStateListener(listener) }
     }

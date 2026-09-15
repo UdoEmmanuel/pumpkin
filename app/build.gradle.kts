@@ -6,6 +6,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("com.google.gms.google-services")
     id("com.google.devtools.ksp")
+    id("com.google.firebase.crashlytics")
 }
 
 // Signing config is read from keystore.properties (gitignored, not committed).
@@ -129,6 +130,13 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.firebase:firebase-messaging-ktx")
+    // Crash reporting — every uncaught exception is captured automatically
+    // (no custom UncaughtExceptionHandler needed), and non-fatals are
+    // recorded explicitly wherever we now catch-and-recover from a risky
+    // native call (MediaRecorder/MediaPlayer) instead of crashing. User IDs
+    // are tagged (see AuthRepository) so a specific user's reports can be
+    // found by uid on the Crashlytics dashboard.
+    implementation("com.google.firebase:firebase-crashlytics-ktx")
     // Google Sign-In (one of the two auth methods enabled on the Firebase project)
     implementation("com.google.android.gms:play-services-auth:21.2.0")
 

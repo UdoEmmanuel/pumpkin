@@ -267,14 +267,22 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
             isReviewPlaying = false
             return
         }
-        val player = current ?: android.media.MediaPlayer().apply {
-            setDataSource(file.absolutePath)
-            prepare()
-            setOnCompletionListener {
-                isReviewPlaying = false
-                reviewPositionMs = 0
-            }
-        }.also { reviewPlayerRef.value = it }
+        val player = current ?: try {
+            android.media.MediaPlayer().apply {
+                setDataSource(file.absolutePath)
+                prepare()
+                setOnCompletionListener {
+                    isReviewPlaying = false
+                    reviewPositionMs = 0
+                }
+            }.also { reviewPlayerRef.value = it }
+        } catch (e: Exception) {
+            // Same reasoning as VoiceNoteBubble.ensurePlayer() — don't crash
+            // over a preview-playback failure, just leave the review UI as
+            // is (the delete/send buttons still work) and log it.
+            com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance().recordException(e)
+            return
+        }
         if (reviewPositionMs > 0) player.seekTo(reviewPositionMs)
         player.start()
         isReviewPlaying = true
@@ -812,7 +820,14 @@ fun ChatScreen(viewModel: ChatViewModel, onBack: () -> Unit) {
                                                 recordPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                                                 return@awaitEachGesture
                                             }
-                                            voiceRecorder.start()
+                                            if (voiceRecorder.start() == null) {
+                                                android.widget.Toast.makeText(
+                                                    context,
+                                                    R.string.chat_recording_start_failed,
+                                                    android.widget.Toast.LENGTH_SHORT
+                                                ).show()
+                                                return@awaitEachGesture
+                                            }
                                             waveformSamples.clear()
                                             fullWaveformSamples.clear()
                                             recordingPhase = RecordingPhase.HELD
@@ -1546,21 +1561,31 @@ private fun VoiceNoteBubble(message: Message, isOwnMessage: Boolean) {
     // MediaPlayer on first use (by either the play button or a seek), but
     // never starts it — separated out of the play button's onClick so
     // seeking works identically whether or not playback has started yet.
+    // Returns null (instead of crashing) if the audio can't actually be
+    // played — a corrupted/truncated base64 payload, a bad file write, or a
+    // format MediaPlayer rejects all throw here, and since messages sync to
+    // every device in the chat, one bad voice note used to be able to crash
+    // every participant the moment any of them tapped play on it.
     fun ensurePlayer(): android.media.MediaPlayer? {
         playerRef.value?.let { return it }
         val audioData = message.audioData ?: return null
-        val bytes = android.util.Base64.decode(audioData, android.util.Base64.NO_WRAP)
-        val dir = java.io.File(context.cacheDir, "voice_in").apply { mkdirs() }
-        val file = java.io.File(dir, "${message.id}.m4a")
-        if (!file.exists()) file.writeBytes(bytes)
-        return android.media.MediaPlayer().apply {
-            setDataSource(file.absolutePath)
-            prepare()
-            setOnCompletionListener {
-                isPlaying = false
-                positionMs = 0
-            }
-        }.also { playerRef.value = it }
+        return try {
+            val bytes = android.util.Base64.decode(audioData, android.util.Base64.NO_WRAP)
+            val dir = java.io.File(context.cacheDir, "voice_in").apply { mkdirs() }
+            val file = java.io.File(dir, "${message.id}.m4a")
+            if (!file.exists()) file.writeBytes(bytes)
+            android.media.MediaPlayer().apply {
+                setDataSource(file.absolutePath)
+                prepare()
+                setOnCompletionListener {
+                    isPlaying = false
+                    positionMs = 0
+                }
+            }.also { playerRef.value = it }
+        } catch (e: Exception) {
+            com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance().recordException(e)
+            null
+        }
     }
 
     // Tap-or-drag-to-seek on the waveform — works whether playback is
