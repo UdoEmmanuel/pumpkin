@@ -1,0 +1,75 @@
+name: CI
+
+# Validates a change before it merges — compiles the Android app (debug,
+# unsigned, no release keystore needed) and lints it, plus a lightweight
+# sanity check on the Node server. Separate from release.yml, which only
+# builds+signs+publishes app/** changes once they're already on main.
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  android-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v6
+        with:
+          java-version: "17"
+          distribution: "temurin"
+
+      - name: Set up Android SDK
+        # See release.yml for why only platform-tools is requested here.
+        uses: android-actions/setup-android@v4
+        with:
+          packages: "platform-tools"
+
+      # Gitignored, never committed — the Google Services plugin (Firebase)
+      # can't run without it, same as release.yml. A debug build doesn't
+      # need the release keystore, so that secret is intentionally not
+      # restored here.
+      - name: Restore google-services.json
+        run: echo "${{ secrets.PUMPKIN_GOOGLE_SERVICES_JSON_BASE64 }}" | base64 -d > app/google-services.json
+
+      - name: Compile Kotlin
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:compileDebugKotlin --no-daemon
+
+      - name: Lint
+        run: ./gradlew :app:lintDebug --no-daemon
+
+      - name: Assemble debug APK
+        run: ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Upload lint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-lint-report
+          path: app/build/reports/lint-results-debug.html
+          if-no-files-found: ignore
+
+  server-check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Syntax-check server sources
+        run: find src -name '*.js' -print0 | xargs -0 -n1 node --check
