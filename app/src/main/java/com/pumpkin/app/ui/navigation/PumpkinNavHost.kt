@@ -50,7 +50,7 @@ fun PumpkinNavHost(activity: FragmentActivity) {
     val navController: NavHostController = rememberNavController()
     val repository = remember(activity) {
         val db = (activity.application as PumpkinApp).database
-        ChatRepository(db.chatDao(), db.messageDao(), db.draftDao())
+        ChatRepository(activity.applicationContext, db.chatDao(), db.messageDao(), db.draftDao())
     }
     val authRepository = remember { AuthRepository() }
     // Single source of truth for "is someone signed in" — both the post-lock

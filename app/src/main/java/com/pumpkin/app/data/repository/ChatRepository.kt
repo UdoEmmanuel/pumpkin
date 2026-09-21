@@ -1,11 +1,13 @@
 package com.pumpkin.app.data.repository
 
+import android.content.Context
 import com.pumpkin.app.data.local.ChatDao
 import com.pumpkin.app.data.local.ChatEntity
 import com.pumpkin.app.data.local.DraftDao
 import com.pumpkin.app.data.local.DraftEntity
 import com.pumpkin.app.data.local.MessageDao
 import com.pumpkin.app.data.local.MessageEntity
+import com.pumpkin.app.data.local.PendingExitStore
 import com.pumpkin.app.data.model.Chat
 import com.pumpkin.app.data.model.Message
 import com.pumpkin.app.data.remote.NetworkModule
@@ -38,6 +40,7 @@ import java.io.IOException
  * tier's daily write quota during testing.
  */
 class ChatRepository(
+    context: Context,
     private val chatDao: ChatDao,
     private val messageDao: MessageDao,
     private val draftDao: DraftDao,
@@ -45,6 +48,7 @@ class ChatRepository(
     private val socket: PumpkinSocket = NetworkModule.socket
 ) {
     private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val pendingExitStore = PendingExitStore(context)
     private var globalMirrorStarted = false
     private var lastKnownUserId: String? = null
 
@@ -74,6 +78,7 @@ class ChatRepository(
                 repositoryScope.launch {
                     socket.connect()
                     lastKnownUserId?.let { resyncFromServer(it) }
+                    flushPendingExits()
                 }
             }
         })
@@ -255,6 +260,7 @@ class ChatRepository(
     /** PRD 4.4: called when the recipient navigates away from the chat screen after reading. */
     suspend fun markExitedAfterRead(chatId: String, messageId: String, readerId: String) {
         socket.markExited(chatId, messageId).getOrElseNetworkError()
+        pendingExitStore.remove(chatId, messageId)
     }
 
     /**
@@ -263,9 +269,28 @@ class ChatRepository(
      * screen is left, which is exactly when ChatViewModel.viewModelScope
      * gets cancelled (the backstack entry is popped), so a suspend call on
      * that scope would be cut off mid-request before the server ever saw it.
+     *
+     * This most commonly fires from ChatScreen's ON_STOP handler, right as
+     * ChatRepository's own ProcessLifecycleOwner observer (above) is about
+     * to disconnect the socket for the same background transition — a
+     * single fire-and-forget emit can easily lose that race (or just get
+     * killed along with the process before the ack lands), silently
+     * dropping this participant's "exited" state forever and leaving the
+     * message undeletable. [pendingExitStore.add] persists the intent
+     * synchronously first, so [flushPendingExits] can retry it on the next
+     * socket connect no matter what happened to this attempt.
      */
     fun markExitedAfterReadAsync(chatId: String, messageId: String, readerId: String) {
+        pendingExitStore.add(chatId, messageId)
         repositoryScope.launch { runCatching { markExitedAfterRead(chatId, messageId, readerId) } }
+    }
+
+    /** Retries any "exited after read" events that never got confirmed by the server. */
+    private suspend fun flushPendingExits() {
+        pendingExitStore.all().forEach { (chatId, messageId) ->
+            runCatching { socket.markExited(chatId, messageId).getOrElseNetworkError() }
+                .onSuccess { pendingExitStore.remove(chatId, messageId) }
+        }
     }
 
     suspend fun setTyping(chatId: String, userId: String, isTyping: Boolean) {
