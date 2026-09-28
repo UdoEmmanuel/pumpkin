@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 import retrofit2.HttpException
 import java.io.IOException
 
@@ -253,8 +254,15 @@ class ChatRepository(
     }
 
     /** PRD 4.4: called when the recipient opens and reads a message. */
-    suspend fun markRead(chatId: String, messageId: String, readerId: String) {
-        socket.markRead(chatId, messageId).getOrElseNetworkError()
+    suspend fun markRead(chatId: String, messageId: String, readerId: String): Result<Unit> {
+        return try {
+            retryOnTimeout {
+                socket.markRead(chatId, messageId).getOrElseNetworkError()
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     /** PRD 4.4: called when the recipient navigates away from the chat screen after reading. */
@@ -385,6 +393,34 @@ class ChatRepository(
     /** chatId -> draft text, for the chat list's "Draft" indicator. */
     fun observeAllDrafts(): Flow<Map<String, String>> =
         draftDao.observeAll().map { list -> list.associate { it.chatId to it.text } }
+
+    /**
+    * Retries a socket call a couple of times on timeout before giving up.
+    * Marking a message read is idempotent, so a blind retry is safe here.
+    * Rethrows CancellationException immediately — must never be swallowed,
+    * or structured concurrency (e.g. this ViewModel being cleared mid-call)
+    * breaks.
+    */
+    private suspend fun <T> retryOnTimeout(
+        times: Int = 3,
+        initialDelayMs: Long = 500,
+        factor: Double = 2.0,
+        block: suspend () -> T
+    ): T {
+        var currentDelay = initialDelayMs
+        repeat(times - 1) {
+            try {
+                return block()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: IllegalStateException) {
+                if (e.message?.contains("Request timed out") != true) throw e
+            }
+            kotlinx.coroutines.delay(currentDelay)
+            currentDelay = (currentDelay * factor).toLong()
+        }
+        return block() // last attempt — let it throw if it still fails
+    }
 
     private fun HttpException.errorMessage(): String? =
         runCatching {

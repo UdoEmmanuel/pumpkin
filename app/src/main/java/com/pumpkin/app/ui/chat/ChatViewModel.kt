@@ -314,6 +314,12 @@ class ChatViewModel(
     fun onMessageRead(messageId: String) {
         viewModelScope.launch {
             repository.markRead(chatId, messageId, currentUserId)
+                .onFailure {
+                    // Best-effort — a failed read receipt isn't worth surfacing
+                    // to the user; it'll get another chance next time the
+                    // message is visible or the chat resyncs.
+                    android.util.Log.w("PumpkinRead", "markRead failed for chat=$chatId msg=$messageId", it)
+                }
         }
     }
 
